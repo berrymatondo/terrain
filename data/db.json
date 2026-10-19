@@ -1,0 +1,131 @@
+{
+  "prospects": [
+    {
+      "id": "p1",
+      "institution": "Ministère du Budget",
+      "contact": "Junior Bisuesue",
+      "offer": "Dashboard Budget RDC",
+      "status": "En négociation",
+      "next": "Tenir une 2e séance de travail avec la DGPPB",
+      "date": "2026-10-10",
+      "owner": "Berry"
+    },
+    {
+      "id": "p2",
+      "institution": "BCC",
+      "contact": "Jean-Louis Kayembe",
+      "offer": "KONEX",
+      "status": "Échange engagé",
+      "next": "Relancer le DG Louis pour les API",
+      "date": "2026-10-10",
+      "owner": "Gemima"
+    },
+    {
+      "id": "p3",
+      "institution": "FIS",
+      "contact": "Emmanuel Kibina",
+      "offer": "Projet KSE",
+      "status": "En attente de la signature",
+      "next": "Signature du protocole d'accord",
+      "date": null,
+      "owner": "Darryl"
+    },
+    {
+      "id": "p4",
+      "institution": "FOMIN",
+      "contact": "Eugène Bunga Muke",
+      "offer": "Service courrier, RH & suivi",
+      "status": "En rédaction",
+      "next": "Finalisation et transmission de l'offre",
+      "date": "2026-10-13",
+      "owner": "Darryl"
+    },
+    {
+      "id": "p5",
+      "institution": "ACOREP",
+      "contact": "M. Joram",
+      "offer": "Plateforme de suivi réglementaire",
+      "status": "Échange engagé",
+      "next": "Recevoir le courrier de réponse aux spécifications",
+      "date": "2026-10-13",
+      "owner": "Gemima"
+    },
+    {
+      "id": "p6",
+      "institution": "DGDA",
+      "contact": "DGA",
+      "offer": "Solution similaire au CAMI",
+      "status": "Échange engagé",
+      "next": "Recevoir un courrier d'invitation",
+      "date": "2026-10-16",
+      "owner": "Olivier"
+    },
+    {
+      "id": "p7",
+      "institution": "ONIP",
+      "contact": "Somanza Kokiyolo",
+      "offer": "Outils de gestion interne",
+      "status": "En étude",
+      "next": "Développer un MVP",
+      "date": null,
+      "owner": "Berry"
+    },
+    {
+      "id": "p8",
+      "institution": "IGF",
+      "contact": "Kitenge",
+      "offer": "Dashboard",
+      "status": "Échange engagé",
+      "next": "Relancer M. Kitenge dans 1 semaine",
+      "date": "2026-10-19",
+      "owner": "Berry"
+    }
+  ],
+  "actions": [
+    {
+      "id": "a1",
+      "title": "Restitution des échanges au DG de l’ACOREP",
+      "detail": "Faire le point sur les modalités de collaboration et solliciter une note auprès de la Direction des Enregistrements.",
+      "owner": "Berry",
+      "due": "À planifier",
+      "prospectId": "p5",
+      "done": false
+    },
+    {
+      "id": "a2",
+      "title": "Lettre d’invitation à la Direction des Enregistrements",
+      "detail": "Rédiger un courrier en vue d’une séance de présentation.",
+      "owner": "Gemima",
+      "due": "Prioritaire",
+      "prospectId": "p5",
+      "done": false
+    },
+    {
+      "id": "a3",
+      "title": "Protocole d’accord et de confidentialité",
+      "detail": "Définir les modalités de collaboration et les engagements de confidentialité.",
+      "owner": "Darryl Kalambayi",
+      "due": "Cette semaine",
+      "prospectId": "p5",
+      "done": false
+    },
+    {
+      "id": "a4",
+      "title": "Relance du point focal ACOREP",
+      "detail": "Reprendre contact avec M. Masidianvinga, Chef de Division chargé de la Gestion des projets.",
+      "owner": "Gemima · Joviale",
+      "due": "À relancer",
+      "prospectId": "p5",
+      "done": false
+    },
+    {
+      "id": "a5",
+      "title": "Élaboration de l’offre technique et financière",
+      "detail": "Préparer une proposition inférieure à 500 000 USD, cohérente avec le PPM.",
+      "owner": "Darryl Kalambayi",
+      "due": "À préparer",
+      "prospectId": "p5",
+      "done": false
+    }
+  ]
+}
