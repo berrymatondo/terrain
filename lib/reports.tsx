@@ -285,7 +285,9 @@ function ProspectDetail({ prospect, actions, ctx }: { prospect: Prospect; action
   const assignees = prospect.assigneeIds.map((id) => ctx.userNames.get(id)).filter(Boolean).join(', ')
   const fields: [string, string][] = [
     ['Institution', prospect.institution],
-    ['Contact', prospect.contact || '—'],
+    ['Adresse', prospect.address || '—'],
+    ['Site web', prospect.website || '—'],
+    ['Plateforme', prospect.platformUrl || '—'],
     ['Offre proposée', prospect.offer || '—'],
     ['Responsable', prospect.owner || '—'],
     ['Prochaine action', prospect.next || '—'],
@@ -305,6 +307,44 @@ function ProspectDetail({ prospect, actions, ctx }: { prospect: Prospect; action
             </View>
           ))}
         </View>
+      </View>
+
+      <View style={s.section}>
+        <SectionTitle title="Contacts" count={prospect.contacts.length} />
+        <Table
+          rows={prospect.contacts}
+          emptyLabel="Aucun contact enregistré."
+          columns={[
+            {
+              label: 'Nom / fonction',
+              width: '30%',
+              render: (c) => (
+                <View>
+                  <Text style={s.tdStrong}>{c.name}</Text>
+                  {c.title && <Text style={{ fontSize: 7.5, color: C.muted, marginTop: 1, paddingRight: 6 }}>{c.title}</Text>}
+                </View>
+              ),
+            },
+            {
+              label: 'Téléphones',
+              width: '34%',
+              render: (c) => (
+                <View>
+                  {(['phone1', 'phone2'] as const).map((key) =>
+                    c[key] ? (
+                      <Text key={key} style={s.td}>
+                        {c[key]}
+                        {c.whatsapp === key ? '  (WhatsApp)' : ''}
+                      </Text>
+                    ) : null,
+                  )}
+                  {!c.phone1 && !c.phone2 && <Text style={[s.td, { color: C.faint }]}>—</Text>}
+                </View>
+              ),
+            },
+            { label: 'E-mail', width: '36%', render: (c) => <Text style={s.td}>{c.email || '—'}</Text> },
+          ]}
+        />
       </View>
 
       <View style={s.section}>

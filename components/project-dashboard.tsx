@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from 'react'
 import { Menu } from '@base-ui/react/menu'
-import { CalendarDays, ChevronDown, CircleCheck, Clock3, Eye, FileDown, FileText, KeyRound, LayoutDashboard, LogOut, MessageSquare, PanelLeftClose, PanelLeftOpen, Paperclip, Pencil, Plus, RotateCcw, Search, Settings2, Target, Trash2, UserCog, Users } from 'lucide-react'
+import { CalendarDays, ChevronDown, CircleCheck, Clock3, Eye, ExternalLink, FileDown, FileText, KeyRound, LayoutDashboard, LogOut, MessageSquare, PanelLeftClose, PanelLeftOpen, Paperclip, Pencil, Plus, RotateCcw, Search, Settings2, Target, Trash2, UserCog, Users } from 'lucide-react'
 import { logout, toggleActionDone } from '@/app/actions'
 import { ActionDialog, DeleteDialog, DocumentsDialog, PasswordDialog, ProspectDialog, UserDialog, type DeleteTarget } from '@/components/crud-dialogs'
 import { NotificationBell } from '@/components/notification-bell'
@@ -135,7 +135,7 @@ export function ProjectDashboard({
       prospects.filter(
         (item) =>
           (!statusFilter || item.status === statusFilter) &&
-          `${item.institution} ${item.contact} ${item.offer} ${item.owner}`.toLowerCase().includes(query.toLowerCase()),
+          `${item.institution} ${item.contacts.map((c) => `${c.name} ${c.email}`).join(" ")} ${item.offer} ${item.owner} ${item.address}`.toLowerCase().includes(query.toLowerCase()),
       ),
     [prospects, query, statusFilter],
   )
@@ -442,6 +442,7 @@ export function ProjectDashboard({
                         <TableHead className="pl-6">Institution / prospect</TableHead>
                         <TableHead>Contact</TableHead>
                         <TableHead>Offre proposée</TableHead>
+                        <TableHead>Plateforme</TableHead>
                         <TableHead>Suivi</TableHead>
                         <TableHead>Statut / avancement</TableHead>
                         <TableHead>Prochaine action</TableHead>
@@ -453,7 +454,7 @@ export function ProjectDashboard({
                     <TableBody>
                       {filteredProspects.length === 0 && (
                         <TableRow>
-                          <TableCell colSpan={editable ? 9 : 8} className="py-10 text-center text-sm text-muted-foreground">
+                          <TableCell colSpan={editable ? 10 : 9} className="py-10 text-center text-sm text-muted-foreground">
                             {prospects.length > 0 ? 'Aucun prospect ne correspond à la recherche.' : editable ? 'Aucun prospect. Ajoutez-en un avec « Nouveau prospect ».' : 'Aucun dossier ne vous a encore été assigné.'}
                           </TableCell>
                         </TableRow>
@@ -471,8 +472,26 @@ export function ProjectDashboard({
                               </p>
                             )}
                           </TableCell>
-                          <TableCell className="text-sm text-slate-600">{item.contact}</TableCell>
+                          <TableCell className="text-sm text-slate-600">
+                            {item.contacts.length === 0 ? (
+                              <span className="text-slate-400">—</span>
+                            ) : (
+                              <button onClick={() => detailEditor.openWith(item.id)} className="text-left hover:text-primary" title={item.contacts.map((c) => c.name).join(', ')}>
+                                {item.contacts[0].name}
+                                {item.contacts.length > 1 && <span className="ml-1.5 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">+{item.contacts.length - 1}</span>}
+                              </button>
+                            )}
+                          </TableCell>
                           <TableCell className="max-w-44 min-w-32 text-sm whitespace-normal text-slate-600">{item.offer}</TableCell>
+                          <TableCell>
+                            {item.platformUrl ? (
+                              <a href={item.platformUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded-lg bg-primary/10 px-2 py-1 text-xs font-medium text-primary hover:bg-primary/15" title={item.platformUrl}>
+                                <ExternalLink className="size-3.5" /> Ouvrir
+                              </a>
+                            ) : (
+                              <span className="text-sm text-slate-300">—</span>
+                            )}
+                          </TableCell>
                           <TableCell>
                             <div className="flex gap-1.5">
                               <Button variant="outline" size="sm" className="gap-1.5" onClick={() => detailEditor.openWith(item.id)} aria-label={`Commentaires et avancement de ${item.institution}`} title="Avancement et commentaires">

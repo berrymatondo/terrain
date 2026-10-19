@@ -122,6 +122,31 @@ await sql`
   )`
 await sql`CREATE INDEX IF NOT EXISTS notifications_user_idx ON notifications (user_id, created_at DESC)`
 
+// Coordonnées de l'institution et lien vers la plateforme développée.
+await sql`ALTER TABLE prospects ADD COLUMN IF NOT EXISTS address text NOT NULL DEFAULT ''`
+await sql`ALTER TABLE prospects ADD COLUMN IF NOT EXISTS website text NOT NULL DEFAULT ''`
+await sql`ALTER TABLE prospects ADD COLUMN IF NOT EXISTS platform_url text NOT NULL DEFAULT ''`
+
+// Plusieurs contacts par institution.
+await sql`
+  CREATE TABLE IF NOT EXISTS prospect_contacts (
+    id          text PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    prospect_id text NOT NULL REFERENCES prospects(id) ON DELETE CASCADE,
+    position    integer NOT NULL DEFAULT 0,
+    name        text NOT NULL,
+    title       text NOT NULL DEFAULT '',
+    phone1      text NOT NULL DEFAULT '',
+    phone2      text NOT NULL DEFAULT '',
+    whatsapp    text CHECK (whatsapp IN ('phone1', 'phone2')),
+    email       text NOT NULL DEFAULT ''
+  )`
+await sql`CREATE INDEX IF NOT EXISTS prospect_contacts_prospect_idx ON prospect_contacts (prospect_id, position)`
+// L'ancien champ « Contact » devient le premier contact de la fiche.
+await sql`
+  INSERT INTO prospect_contacts (prospect_id, position, name)
+  SELECT p.id, 0, p.contact FROM prospects p
+  WHERE p.contact <> '' AND NOT EXISTS (SELECT 1 FROM prospect_contacts c WHERE c.prospect_id = p.id)`
+
 // Premier administrateur : ADMIN_EMAIL / ADMIN_PASSWORD, sinon mot de passe généré et affiché une fois.
 const [{ count: userCount }] = await sql`SELECT count(*)::int AS count FROM users`
 if (userCount === 0) {

@@ -35,7 +35,7 @@ import {
   updateProspect,
   updateUser,
 } from '@/lib/db'
-import { ACTION_DUE_LABELS, canModifyComment, LEGACY_OWNER, MAX_COMMENT_LENGTH, PROSPECT_STATUSES, ROLES, type ActionDue, type MutationResult, type ProspectStatus, type Role, type User } from '@/lib/types'
+import { ACTION_DUE_LABELS, canModifyComment, LEGACY_OWNER, MAX_COMMENT_LENGTH, MAX_CONTACTS, normalizeUrl, PROSPECT_STATUSES, ROLES, type Contact, type ActionDue, type MutationResult, type ProspectStatus, type Role, type User } from '@/lib/types'
 
 class NotFoundError extends Error {}
 class ValidationError extends Error {}
@@ -82,6 +82,47 @@ async function resolveOwner(formData: FormData, current?: { owner: string; owner
   return { owner: member.name, ownerId: member.id }
 }
 
+/** Lien http(s) saisi dans le formulaire (« https:// » ajouté si absent). */
+function url(formData: FormData, key: string, label: string) {
+  const value = normalizeUrl(text(formData, key))
+  if (value === null) invalid(`${label} : adresse invalide (exemple : https://exemple.cd).`)
+  return value
+}
+
+/** Contacts envoyés en JSON par le formulaire ; les lignes entièrement vides sont ignorées. */
+function parseContacts(formData: FormData): Contact[] {
+  let raw: unknown
+  try {
+    raw = JSON.parse(String(formData.get('contacts') ?? '[]'))
+  } catch {
+    invalid('Liste de contacts invalide.')
+  }
+  if (!Array.isArray(raw)) invalid('Liste de contacts invalide.')
+  const str = (v: unknown, max = 200) => String(v ?? '').trim().slice(0, max)
+
+  const contacts = raw
+    .map((c) => ({
+      name: str(c?.name),
+      title: str(c?.title),
+      phone1: str(c?.phone1, 40),
+      phone2: str(c?.phone2, 40),
+      whatsapp: c?.whatsapp === 'phone1' || c?.whatsapp === 'phone2' ? (c.whatsapp as Contact['whatsapp']) : null,
+      email: str(c?.email).toLowerCase(),
+    }))
+    .filter((c) => c.name || c.title || c.phone1 || c.phone2 || c.email)
+
+  if (contacts.length > MAX_CONTACTS) invalid(`Au maximum ${MAX_CONTACTS} contacts par institution.`)
+  contacts.forEach((c, i) => {
+    const label = `Contact ${i + 1}`
+    if (!c.name) invalid(`${label} : le nom est requis.`)
+    if (c.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(c.email)) invalid(`${label} : adresse e-mail invalide.`)
+    for (const phone of [c.phone1, c.phone2]) if (phone && !/^[+()\d][\d\s().-]{4,}$/.test(phone)) invalid(`${label} : numéro de téléphone invalide (« ${phone} »).`)
+    // WhatsApp doit désigner un numéro renseigné.
+    if (c.whatsapp && !c[c.whatsapp]) c.whatsapp = null
+  })
+  return contacts
+}
+
 /** Une notification qui échoue ne doit pas faire échouer l'enregistrement. */
 async function safely(task: Promise<unknown>) {
   try {
@@ -101,13 +142,19 @@ export async function saveProspect(formData: FormData): Promise<MutationResult> 
     const before = id ? await getProspectSnapshot(id) : undefined
     if (id) ensureFound(!!before, 'Ce prospect n’existe plus.')
 
+    const contacts = parseContacts(formData)
     const data = {
       institution: text(formData, 'institution'),
-      contact: text(formData, 'contact'),
+      // Le premier contact sert de contact principal (tableau, rapports).
+      contact: contacts[0]?.name ?? '',
+      contacts,
       offer: text(formData, 'offer'),
       status,
       next: text(formData, 'next'),
       date: date || null,
+      address: text(formData, 'address').slice(0, 500),
+      website: url(formData, 'website', 'Site web'),
+      platformUrl: url(formData, 'platformUrl', 'Lien de la plateforme'),
       ...(await resolveOwner(formData, before)),
     }
 

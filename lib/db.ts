@@ -1,5 +1,5 @@
 import { neon } from '@neondatabase/serverless'
-import type { Action, ActionDue, Comment, Database, DocumentMeta, Member, Notification, Prospect, ProspectStatus, Role, StatusChange, User } from '@/lib/types'
+import type { Action, ActionDue, Comment, Contact, Database, DocumentMeta, Member, Notification, Prospect, ProspectStatus, Role, StatusChange, User } from '@/lib/types'
 import { canEdit } from '@/lib/types'
 
 if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL manquant (voir .env.local)')
@@ -16,9 +16,9 @@ type ActionInput = Omit<Action, 'id' | 'done'>
 export async function getDatabase(user: User): Promise<Database> {
   const restricted = !canEdit(user.role)
   // Un « user » voit les dossiers qui lui sont assignés et ceux dont il est responsable.
-  const [prospects, actions, assignments, documents, comments, history] = await Promise.all([
+  const [prospects, actions, assignments, documents, comments, history, contacts] = await Promise.all([
     sql`SELECT p.id, p.institution, p.contact, p.offer, p.status, p.next, to_char(p.date, 'YYYY-MM-DD') AS date,
-               COALESCE(u.name, p.owner) AS owner, p.owner_id AS "ownerId"
+               COALESCE(u.name, p.owner) AS owner, p.owner_id AS "ownerId", p.address, p.website, p.platform_url AS "platformUrl"
         FROM prospects p LEFT JOIN users u ON u.id = p.owner_id
         WHERE ${restricted}::boolean = false
            OR p.id IN (SELECT prospect_id FROM prospect_assignments WHERE user_id = ${user.id} UNION SELECT id FROM prospects WHERE owner_id = ${user.id})
@@ -43,6 +43,11 @@ export async function getDatabase(user: User): Promise<Database> {
         WHERE ${restricted}::boolean = false
            OR h.prospect_id IN (SELECT prospect_id FROM prospect_assignments WHERE user_id = ${user.id} UNION SELECT id FROM prospects WHERE owner_id = ${user.id})
         ORDER BY h.changed_at`,
+    sql`SELECT c.prospect_id, c.name, c.title, c.phone1, c.phone2, c.whatsapp, c.email
+        FROM prospect_contacts c
+        WHERE ${restricted}::boolean = false
+           OR c.prospect_id IN (SELECT prospect_id FROM prospect_assignments WHERE user_id = ${user.id} UNION SELECT id FROM prospects WHERE owner_id = ${user.id})
+        ORDER BY c.position`,
   ])
   const iso = (value: unknown) => (value ? new Date(value as string).toISOString() : null)
 
@@ -60,6 +65,7 @@ export async function getDatabase(user: User): Promise<Database> {
       history: history
         .filter((h) => h.prospect_id === p.id)
         .map(({ prospect_id: _, changedAt, ...h }) => ({ ...h, changedAt: iso(changedAt) }) as StatusChange),
+      contacts: contacts.filter((c) => c.prospect_id === p.id).map(({ prospect_id: _, ...c }) => c as Contact),
     })) as Prospect[],
     actions: actions as Action[],
   }
@@ -82,12 +88,25 @@ function assignmentQueries(prospectId: string, userIds: string[]) {
   ]
 }
 
+/** Remplace la liste des contacts d'un prospect (l'ordre saisi est conservé). */
+function contactQueries(prospectId: string, contacts: Contact[]) {
+  return [
+    sql`DELETE FROM prospect_contacts WHERE prospect_id = ${prospectId}`,
+    ...contacts.map(
+      (c, position) => sql`INSERT INTO prospect_contacts (prospect_id, position, name, title, phone1, phone2, whatsapp, email)
+                           VALUES (${prospectId}, ${position}, ${c.name}, ${c.title}, ${c.phone1}, ${c.phone2}, ${c.whatsapp}, ${c.email})`,
+    ),
+  ]
+}
+
 export async function createProspect(p: ProspectInput, assigneeIds: string[], userId: string) {
-  const [{ id }] = await sql`INSERT INTO prospects (institution, contact, offer, status, next, date, owner, owner_id)
-                             VALUES (${p.institution}, ${p.contact}, ${p.offer}, ${p.status}, ${p.next}, ${p.date}, ${p.owner}, ${p.ownerId}) RETURNING id`
+  const [{ id }] = await sql`INSERT INTO prospects (institution, contact, offer, status, next, date, owner, owner_id, address, website, platform_url)
+                             VALUES (${p.institution}, ${p.contact}, ${p.offer}, ${p.status}, ${p.next}, ${p.date}, ${p.owner}, ${p.ownerId},
+                                     ${p.address}, ${p.website}, ${p.platformUrl}) RETURNING id`
   await sql.transaction([
     sql`INSERT INTO prospect_status_history (prospect_id, status, changed_by) VALUES (${id}, ${p.status}, ${userId})`,
     ...assignmentQueries(id, assigneeIds),
+    ...contactQueries(id, p.contacts),
   ])
   return id as string
 }
@@ -99,9 +118,11 @@ export async function updateProspect(id: string, p: ProspectInput, assigneeIds: 
         SELECT id, ${p.status}, ${userId} FROM prospects WHERE id = ${id} AND status <> ${p.status}`,
     sql`UPDATE prospects
         SET institution = ${p.institution}, contact = ${p.contact}, offer = ${p.offer}, status = ${p.status as ProspectStatus},
-            next = ${p.next}, date = ${p.date}, owner = ${p.owner}, owner_id = ${p.ownerId}
+            next = ${p.next}, date = ${p.date}, owner = ${p.owner}, owner_id = ${p.ownerId},
+            address = ${p.address}, website = ${p.website}, platform_url = ${p.platformUrl}
         WHERE id = ${id} RETURNING id`,
     ...assignmentQueries(id, assigneeIds),
+    ...contactQueries(id, p.contacts),
   ])
   return rows.length > 0
 }

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { Check, CircleX, FileDown, MessageSquare, Pencil, Trash2 } from 'lucide-react'
+import { Check, CircleX, FileDown, Globe, Mail, MapPin, MessageCircle, MessageSquare, MonitorSmartphone, Pencil, Phone, Trash2 } from 'lucide-react'
 import { addComment, deleteComment, editComment } from '@/app/actions'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button, buttonVariants } from '@/components/ui/button'
@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/field'
 import { PIPELINE, progressOf } from '@/lib/progress'
-import { canModifyComment, MAX_COMMENT_LENGTH, type Comment, type Prospect, type User } from '@/lib/types'
+import { canModifyComment, MAX_COMMENT_LENGTH, whatsappLink, type Comment, type Prospect, type User } from '@/lib/types'
 
 function initials(name: string) {
   const words = name.replace(/[^\p{L}\s-]/gu, ' ').split(/[\s-]+/).filter((w) => w.length > 1)
@@ -202,6 +202,83 @@ function CommentForm({ prospectId }: { prospectId: string }) {
   )
 }
 
+/* ---------- Institution et contacts ---------- */
+
+function InstitutionCard({ prospect }: { prospect: Prospect }) {
+  const links = [
+    prospect.platformUrl && { href: prospect.platformUrl, label: 'Accéder à la plateforme', icon: MonitorSmartphone, primary: true },
+    prospect.website && { href: prospect.website, label: prospect.website.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, ''), icon: Globe, primary: false },
+  ].filter(Boolean) as { href: string; label: string; icon: React.ElementType; primary: boolean }[]
+
+  return (
+    <section className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex min-w-0 items-start gap-2 text-sm text-slate-600">
+          <MapPin className="mt-0.5 size-4 shrink-0 text-slate-400" />
+          <span className="whitespace-pre-line">{prospect.address || <span className="text-slate-400">Adresse non renseignée</span>}</span>
+        </div>
+        {links.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {links.map(({ href, label, icon: Icon, primary }) => (
+              <a
+                key={href}
+                href={href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={cn(buttonVariants({ variant: primary ? 'default' : 'outline', size: 'sm' }), 'max-w-64 gap-1.5')}
+              >
+                <Icon data-icon="inline-start" /> <span className="truncate">{label}</span>
+              </a>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {prospect.contacts.length === 0 ? (
+        <p className="text-sm text-slate-400">Aucun contact enregistré.</p>
+      ) : (
+        <ul className="grid gap-2 sm:grid-cols-2">
+          {prospect.contacts.map((c, i) => (
+            <li key={i} className="flex gap-3 rounded-lg bg-white p-3 ring-1 ring-slate-200/70">
+              <Avatar className="size-8 shrink-0">
+                <AvatarFallback className="bg-primary/10 text-[10px] font-semibold text-primary">{initials(c.name)}</AvatarFallback>
+              </Avatar>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium">
+                  {c.name}
+                  {i === 0 && <span className="ml-1.5 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">principal</span>}
+                </p>
+                {c.title && <p className="truncate text-xs text-muted-foreground">{c.title}</p>}
+                <div className="mt-1.5 flex flex-col gap-1 text-xs">
+                  {(['phone1', 'phone2'] as const).map((key) =>
+                    c[key] ? (
+                      <span key={key} className="flex items-center gap-1.5">
+                        <a href={`tel:${c[key].replace(/[^\d+]/g, '')}`} className="inline-flex items-center gap-1 text-slate-700 hover:text-primary">
+                          <Phone className="size-3 text-slate-400" /> {c[key]}
+                        </a>
+                        {c.whatsapp === key && whatsappLink(c[key]) && (
+                          <a href={whatsappLink(c[key])!} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-1.5 py-0.5 font-medium text-emerald-700 hover:bg-emerald-100" title="Écrire sur WhatsApp">
+                            <MessageCircle className="size-3" /> WhatsApp
+                          </a>
+                        )}
+                      </span>
+                    ) : null,
+                  )}
+                  {c.email && (
+                    <a href={`mailto:${c.email}`} className="inline-flex items-center gap-1 truncate text-slate-700 hover:text-primary">
+                      <Mail className="size-3 text-slate-400" /> {c.email}
+                    </a>
+                  )}
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  )
+}
+
 /* ---------- Fiche ---------- */
 
 export function ProspectDetailDialog({ open, onOpenChange, prospect, currentUser }: { open: boolean; onOpenChange: (open: boolean) => void; prospect?: Prospect; currentUser: User }) {
@@ -217,8 +294,10 @@ export function ProspectDetailDialog({ open, onOpenChange, prospect, currentUser
                   <FileDown data-icon="inline-start" /> Rapport PDF
                 </a>
               </div>
-              <DialogDescription>{[prospect.offer, prospect.contact && `Contact : ${prospect.contact}`, prospect.owner && `Responsable : ${prospect.owner}`].filter(Boolean).join(' · ') || 'Suivi du prospect'}</DialogDescription>
+              <DialogDescription>{[prospect.offer, prospect.owner && `Responsable : ${prospect.owner}`].filter(Boolean).join(' · ') || 'Suivi du prospect'}</DialogDescription>
             </DialogHeader>
+
+            <InstitutionCard prospect={prospect} />
 
             <div className="grid gap-6 md:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
               <section className="flex flex-col gap-4">

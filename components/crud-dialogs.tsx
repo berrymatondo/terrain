@@ -2,12 +2,13 @@
 
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { Download, FileText, Trash2, Upload } from 'lucide-react'
+import { ArrowLeft, ChevronLeft, ChevronRight, Download, ExternalLink, Eye, FileText, Plus, Trash2, Upload, X } from 'lucide-react'
 import { changeOwnPassword, deleteAction, deleteDocument, deleteProspect, deleteUser, saveAction, saveProspect, saveUser } from '@/app/actions'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Field, Input, NativeSelect, Textarea } from '@/components/ui/field'
-import { ACTION_DUE_LABELS, LEGACY_OWNER, MAX_DOCUMENT_SIZE, PROSPECT_STATUSES, ROLE_DESCRIPTIONS, ROLE_LABELS, ROLES, type Action, type Member, type MutationResult, type Prospect, type User } from '@/lib/types'
+import { previewOf } from '@/lib/documents'
+import { ACTION_DUE_LABELS, LEGACY_OWNER, MAX_CONTACTS, MAX_DOCUMENT_SIZE, PROSPECT_STATUSES, ROLE_DESCRIPTIONS, ROLE_LABELS, ROLES, type Action, type Contact, type DocumentMeta, type Member, type MutationResult, type Prospect, type User } from '@/lib/types'
 
 type DialogProps = { open: boolean; onOpenChange: (open: boolean) => void; formKey: number }
 
@@ -59,12 +60,85 @@ function OwnerSelect({ id, members, current }: { id: string; members: Member[]; 
   )
 }
 
+function FormSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="flex flex-col gap-3">
+      <h3 className="text-[11px] font-semibold tracking-wider text-slate-400 uppercase">{title}</h3>
+      {children}
+    </section>
+  )
+}
+
+const emptyContact = (): Contact => ({ name: '', title: '', phone1: '', phone2: '', whatsapp: null, email: '' })
+
+/** Liste de contacts modifiable ; envoyée au serveur en JSON dans le champ caché « contacts ». */
+function ContactsEditor({ initial }: { initial?: Contact[] }) {
+  const [contacts, setContacts] = useState<Contact[]>(initial?.length ? initial : [emptyContact()])
+  const update = (index: number, patch: Partial<Contact>) => setContacts((list) => list.map((c, i) => (i === index ? { ...c, ...patch } : c)))
+
+  return (
+    <div className="flex flex-col gap-3">
+      <input type="hidden" name="contacts" value={JSON.stringify(contacts)} />
+      {contacts.map((contact, index) => {
+        const id = (field: string) => `contact-${index}-${field}`
+        return (
+          <div key={index} className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+            <div className="mb-2 flex items-center justify-between">
+              <p className="text-xs font-semibold text-slate-600">
+                Contact {index + 1}
+                {index === 0 && <span className="ml-1.5 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary">principal</span>}
+              </p>
+              <Button type="button" variant="ghost" size="icon-xs" className="text-slate-400 hover:text-destructive" aria-label={`Retirer le contact ${index + 1}`} onClick={() => setContacts((list) => list.filter((_, i) => i !== index))}>
+                <X />
+              </Button>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Nom" htmlFor={id('name')}>
+                <Input id={id('name')} value={contact.name} onChange={(e) => update(index, { name: e.target.value })} placeholder="Prénom Nom" />
+              </Field>
+              <Field label="Fonction" htmlFor={id('title')}>
+                <Input id={id('title')} value={contact.title} onChange={(e) => update(index, { title: e.target.value })} placeholder="Directeur, point focal…" />
+              </Field>
+              {(['phone1', 'phone2'] as const).map((phone, n) => (
+                <Field key={phone} label={`Téléphone ${n + 1}`} htmlFor={id(phone)}>
+                  <div className="flex items-center gap-2">
+                    <Input id={id(phone)} type="tel" value={contact[phone]} onChange={(e) => update(index, { [phone]: e.target.value })} placeholder="+243 …" />
+                    <label className={`flex shrink-0 cursor-pointer items-center gap-1 rounded-lg border px-2 py-1.5 text-xs transition-colors ${contact.whatsapp === phone ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-white text-slate-500'}`} title="Numéro utilisé pour WhatsApp">
+                      <input
+                        type="checkbox"
+                        className="size-3.5 accent-emerald-600"
+                        checked={contact.whatsapp === phone}
+                        onChange={(e) => update(index, { whatsapp: e.target.checked ? phone : null })}
+                      />
+                      WhatsApp
+                    </label>
+                  </div>
+                </Field>
+              ))}
+              <Field label="Adresse e-mail" htmlFor={id('email')} className="sm:col-span-2">
+                <Input id={id('email')} type="email" value={contact.email} onChange={(e) => update(index, { email: e.target.value })} placeholder="nom@institution.cd" />
+              </Field>
+            </div>
+          </div>
+        )
+      })}
+      {contacts.length < MAX_CONTACTS ? (
+        <Button type="button" variant="outline" size="sm" className="self-start" onClick={() => setContacts((list) => [...list, emptyContact()])}>
+          <Plus data-icon="inline-start" /> Ajouter un contact
+        </Button>
+      ) : (
+        <p className="text-xs text-muted-foreground">Maximum de {MAX_CONTACTS} contacts atteint.</p>
+      )}
+    </div>
+  )
+}
+
 /* ---------- Prospect ---------- */
 
 export function ProspectDialog({ open, onOpenChange, formKey, prospect, assignableUsers, members }: DialogProps & { prospect?: Prospect; assignableUsers: User[]; members: Member[] }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>{prospect ? 'Modifier le prospect' : 'Nouveau prospect'}</DialogTitle>
           <DialogDescription>{prospect ? `Mettre à jour le suivi de ${prospect.institution}.` : 'Ajouter une opportunité au portefeuille.'}</DialogDescription>
@@ -79,19 +153,35 @@ function ProspectForm({ prospect, assignableUsers, members, onSuccess }: { prosp
   const { error, pending, onSubmit } = useSubmit(saveProspect, onSuccess)
 
   return (
-    <form onSubmit={onSubmit} className="grid gap-4">
+    <form onSubmit={onSubmit} className="grid gap-5">
       {prospect && <input type="hidden" name="id" value={prospect.id} />}
-      <div className="grid gap-4 sm:grid-cols-2">
+
+      <FormSection title="Institution">
         <Field label="Institution / prospect *" htmlFor="institution">
           <Input id="institution" name="institution" required autoFocus defaultValue={prospect?.institution} />
         </Field>
-        <Field label="Contact" htmlFor="contact">
-          <Input id="contact" name="contact" defaultValue={prospect?.contact} />
+        <Field label="Adresse physique" htmlFor="address">
+          <Textarea id="address" name="address" rows={2} className="min-h-0" placeholder="Avenue, numéro, commune, ville" defaultValue={prospect?.address} />
         </Field>
-      </div>
-      <Field label="Offre proposée" htmlFor="offer">
-        <Input id="offer" name="offer" defaultValue={prospect?.offer} />
-      </Field>
+        <Field label="Site web" htmlFor="website">
+          <Input id="website" name="website" inputMode="url" placeholder="www.institution.cd" defaultValue={prospect?.website} />
+        </Field>
+      </FormSection>
+
+      <FormSection title="Offre et plateforme">
+        <Field label="Offre proposée" htmlFor="offer">
+          <Input id="offer" name="offer" defaultValue={prospect?.offer} />
+        </Field>
+        <Field label="Lien d’accès à la plateforme" htmlFor="platformUrl">
+          <Input id="platformUrl" name="platformUrl" inputMode="url" placeholder="https://plateforme.exemple.cd" defaultValue={prospect?.platformUrl} />
+        </Field>
+      </FormSection>
+
+      <FormSection title="Contacts">
+        <ContactsEditor initial={prospect?.contacts} />
+      </FormSection>
+
+      <FormSection title="Suivi">
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Statut" htmlFor="status">
           <NativeSelect id="status" name="status" defaultValue={prospect?.status ?? 'À contacter'}>
@@ -114,6 +204,7 @@ function ProspectForm({ prospect, assignableUsers, members, onSuccess }: { prosp
           <Input id="date" name="date" type="date" defaultValue={prospect?.date ?? ''} />
         </Field>
       </div>
+      </FormSection>
       <fieldset className="flex flex-col gap-1.5">
         <legend className="text-xs font-medium text-slate-600">Utilisateurs ayant accès à ce dossier</legend>
         <p className="text-xs text-muted-foreground">Les administrateurs et managers voient tous les dossiers. Les utilisateurs ne voient que ceux qui leur sont assignés ou dont ils sont responsables. Toutes ces personnes sont notifiées des changements.</p>
@@ -148,8 +239,11 @@ export function DocumentsDialog({ open, onOpenChange, prospect, editable }: { op
   const [error, setError] = useState<string>()
   const [uploading, setUploading] = useState(false)
   const [deletingId, setDeletingId] = useState<string>()
+  const [previewId, setPreviewId] = useState<string>()
   const [, startTransition] = useTransition()
   const documents = prospect?.documents ?? []
+  const previewIndex = documents.findIndex((d) => d.id === previewId)
+  const previewed = previewIndex >= 0 ? documents[previewIndex] : undefined
 
   async function upload(files: FileList | null) {
     if (!prospect || !files?.length) return
@@ -185,15 +279,28 @@ export function DocumentsDialog({ open, onOpenChange, prospect, editable }: { op
     <Dialog
       open={open}
       onOpenChange={(next) => {
-        if (next) setError(undefined)
+        if (next) {
+          setError(undefined)
+          setPreviewId(undefined)
+        }
         onOpenChange(next)
       }}
     >
-      <DialogContent className="max-w-xl">
+      <DialogContent className={previewed ? 'max-w-5xl' : 'max-w-xl'}>
+        {previewed ? (
+          <DocumentPreview
+            doc={previewed}
+            position={`${previewIndex + 1} / ${documents.length}`}
+            onBack={() => setPreviewId(undefined)}
+            onPrevious={previewIndex > 0 ? () => setPreviewId(documents[previewIndex - 1].id) : undefined}
+            onNext={previewIndex < documents.length - 1 ? () => setPreviewId(documents[previewIndex + 1].id) : undefined}
+          />
+        ) : (
+        <>
         <DialogHeader>
           <DialogTitle>Documents — {prospect?.institution}</DialogTitle>
           <DialogDescription>
-            {documents.length === 0 ? 'Aucun document joint.' : `${documents.length} document${documents.length > 1 ? 's' : ''} joint${documents.length > 1 ? 's' : ''}.`}
+            {documents.length === 0 ? 'Aucun document joint.' : `${documents.length} document${documents.length > 1 ? 's' : ''} joint${documents.length > 1 ? 's' : ''}. Cliquez sur un document pour l’afficher.`}
           </DialogDescription>
         </DialogHeader>
 
@@ -203,14 +310,17 @@ export function DocumentsDialog({ open, onOpenChange, prospect, editable }: { op
               <li key={doc.id} className="flex items-center gap-3 px-3 py-2.5">
                 <FileText className="size-4 shrink-0 text-slate-400" />
                 <div className="min-w-0 flex-1">
-                  <a href={`/api/documents/${doc.id}`} target="_blank" rel="noopener" className="block truncate text-sm font-medium hover:text-primary hover:underline">
+                  <button onClick={() => setPreviewId(doc.id)} className="block max-w-full truncate text-left text-sm font-medium hover:text-primary hover:underline">
                     {doc.name}
-                  </a>
+                  </button>
                   <p className="text-xs text-muted-foreground">
                     {formatSize(doc.size)} · {new Date(doc.createdAt).toLocaleDateString('fr-FR')}
                     {doc.uploadedBy && ` · ${doc.uploadedBy}`}
                   </p>
                 </div>
+                <Button variant="ghost" size="icon" aria-label={`Afficher ${doc.name}`} title="Afficher" onClick={() => setPreviewId(doc.id)}>
+                  <Eye />
+                </Button>
                 <a href={`/api/documents/${doc.id}?download`} aria-label={`Télécharger ${doc.name}`} title="Télécharger" className={buttonVariants({ variant: 'ghost', size: 'icon' })}>
                   <Download />
                 </a>
@@ -243,8 +353,68 @@ export function DocumentsDialog({ open, onOpenChange, prospect, editable }: { op
         )}
 
         {error && <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
+        </>
+        )}
       </DialogContent>
     </Dialog>
+  )
+}
+
+/** Visionneuse intégrée : PDF, images, texte, audio et vidéo s'affichent sans téléchargement. */
+function DocumentPreview({ doc, position, onBack, onPrevious, onNext }: { doc: DocumentMeta; position: string; onBack: () => void; onPrevious?: () => void; onNext?: () => void }) {
+  const preview = previewOf(doc.name, doc.mime)
+  const src = `/api/documents/${doc.id}`
+  return (
+    <div className="flex min-w-0 flex-col gap-3">
+      <div className="flex flex-wrap items-center gap-2 pr-8">
+        <Button variant="outline" size="sm" onClick={onBack}>
+          <ArrowLeft data-icon="inline-start" /> Documents
+        </Button>
+        <div className="min-w-0 flex-1">
+          <DialogTitle className="truncate text-sm">{doc.name}</DialogTitle>
+          <DialogDescription className="text-xs">
+            {formatSize(doc.size)} · {position}
+          </DialogDescription>
+        </div>
+        <div className="flex items-center gap-1">
+          <Button variant="ghost" size="icon" disabled={!onPrevious} onClick={onPrevious} aria-label="Document précédent" title="Précédent">
+            <ChevronLeft />
+          </Button>
+          <Button variant="ghost" size="icon" disabled={!onNext} onClick={onNext} aria-label="Document suivant" title="Suivant">
+            <ChevronRight />
+          </Button>
+          {preview && (
+            <a href={src} target="_blank" rel="noopener" className={buttonVariants({ variant: 'ghost', size: 'icon' })} aria-label="Ouvrir dans un nouvel onglet" title="Ouvrir dans un nouvel onglet">
+              <ExternalLink />
+            </a>
+          )}
+          <a href={`${src}?download`} className={buttonVariants({ variant: 'outline', size: 'sm' })}>
+            <Download data-icon="inline-start" /> Télécharger
+          </a>
+        </div>
+      </div>
+
+      <div className="flex h-[min(72vh,800px)] items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
+        {preview?.kind === 'pdf' && <iframe key={doc.id} src={src} title={doc.name} className="size-full bg-white" />}
+        {preview?.kind === 'text' && <iframe key={doc.id} src={src} title={doc.name} sandbox="" className="size-full bg-white" />}
+        {/* eslint-disable-next-line @next/next/no-img-element -- fichier privé servi par l'API, pas d'optimisation possible */}
+        {preview?.kind === 'image' && <img key={doc.id} src={src} alt={doc.name} className="max-h-full max-w-full object-contain" />}
+        {preview?.kind === 'video' && <video key={doc.id} src={src} controls className="max-h-full max-w-full" />}
+        {preview?.kind === 'audio' && <audio key={doc.id} src={src} controls className="w-4/5" />}
+        {!preview && (
+          <div className="flex max-w-sm flex-col items-center gap-3 p-6 text-center">
+            <div className="flex size-12 items-center justify-center rounded-2xl bg-white text-slate-400 shadow-sm">
+              <FileText className="size-6" />
+            </div>
+            <p className="text-sm font-medium text-slate-700">Aperçu non disponible pour ce type de fichier</p>
+            <p className="text-xs text-muted-foreground">Les PDF, images, textes, sons et vidéos s’affichent directement. Pour les fichiers Word, Excel ou PowerPoint, téléchargez-les ou joignez-en une version PDF.</p>
+            <a href={`${src}?download`} className={buttonVariants({ size: 'sm' })}>
+              <Download data-icon="inline-start" /> Télécharger
+            </a>
+          </div>
+        )}
+      </div>
+    </div>
   )
 }
 

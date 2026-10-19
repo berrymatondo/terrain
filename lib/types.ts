@@ -30,6 +30,13 @@ export type Prospect = {
   owner: string
   /** Compte responsable (destinataire des notifications), null si aucun ou ancien nom libre. */
   ownerId: string | null
+  /** Adresse physique de l'institution. */
+  address: string
+  website: string
+  /** Lien d'accès à la plateforme développée pour ce prospect. */
+  platformUrl: string
+  /** Contacts de l'institution, dans l'ordre (le premier est le contact principal). */
+  contacts: Contact[]
   /** Utilisateurs (profil « user ») ayant accès à ce dossier. */
   assigneeIds: string[]
   documents: DocumentMeta[]
@@ -132,4 +139,35 @@ export type Notification = {
   actorName: string | null
   read: boolean
   createdAt: string
+}
+
+export type Contact = {
+  name: string
+  /** Fonction dans l'institution. */
+  title: string
+  phone1: string
+  phone2: string
+  /** Numéro utilisé pour WhatsApp. */
+  whatsapp: 'phone1' | 'phone2' | null
+  email: string
+}
+
+export const MAX_CONTACTS = 10
+
+/** Lien http(s) affichable, ou chaîne vide. Ajoute « https:// » si l'adresse est saisie sans protocole. */
+export function normalizeUrl(value: string) {
+  const raw = value.trim()
+  if (!raw) return ''
+  try {
+    const url = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : `https://${raw}`)
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.toString() : null
+  } catch {
+    return null
+  }
+}
+
+/** Lien WhatsApp (wa.me) à partir d'un numéro au format international. */
+export function whatsappLink(phone: string) {
+  const digits = phone.replace(/\D/g, '').replace(/^00/, '')
+  return digits ? `https://wa.me/${digits}` : null
 }
