@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from 'react'
 import { Menu } from '@base-ui/react/menu'
-import { CalendarDays, ChevronDown, CircleCheck, Clock3, Eye, ExternalLink, FileDown, FileText, KeyRound, LayoutDashboard, LogOut, MessageSquare, PanelLeftClose, PanelLeftOpen, Paperclip, Pencil, Plus, RotateCcw, Search, Settings2, Target, Trash2, UserCog, Users } from 'lucide-react'
+import { CalendarDays, ChevronDown, CircleCheck, Clock3, Eye, EyeOff, ExternalLink, FileDown, FileText, KeyRound, LayoutDashboard, LogOut, MessageSquare, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Paperclip, Pencil, Plus, RotateCcw, Search, Settings2, Target, Trash2, UserCog, Users } from 'lucide-react'
 import { logout, toggleActionDone } from '@/app/actions'
 import { ActionDialog, DeleteDialog, DocumentsDialog, PasswordDialog, ProspectDialog, UserDialog, type DeleteTarget } from '@/components/crud-dialogs'
 import { NotificationBell } from '@/components/notification-bell'
@@ -75,6 +75,8 @@ function useEditor<T>() {
   }
 }
 
+const NO_OWNER = '__none__'
+
 type View = 'Vue d’ensemble' | 'Actions à mener' | 'Utilisateurs'
 
 export function ProjectDashboard({
@@ -103,6 +105,8 @@ export function ProjectDashboard({
   const [mobileOpen, setMobileOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
+  const [ownerFilter, setOwnerFilter] = useState('')
+  const [showOffer, setShowOffer] = useState(false)
   const prospectEditor = useEditor<Prospect>()
   const actionEditor = useEditor<Action>()
   const userEditor = useEditor<User>()
@@ -130,14 +134,17 @@ export function ProjectDashboard({
     document.cookie = `sidebar-collapsed=${next ? 1 : 0}; path=/; max-age=31536000; samesite=lax`
   }
 
+  const owners = useMemo(() => [...new Set(prospects.map((p) => p.owner).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'fr')), [prospects])
+  const hasUnassigned = prospects.some((p) => !p.owner)
   const filteredProspects = useMemo(
     () =>
       prospects.filter(
         (item) =>
           (!statusFilter || item.status === statusFilter) &&
+          (!ownerFilter || (ownerFilter === NO_OWNER ? !item.owner : item.owner === ownerFilter)) &&
           `${item.institution} ${item.contacts.map((c) => `${c.name} ${c.email}`).join(" ")} ${item.offer} ${item.owner} ${item.address}`.toLowerCase().includes(query.toLowerCase()),
       ),
-    [prospects, query, statusFilter],
+    [prospects, query, statusFilter, ownerFilter],
   )
 
   const pendingActions = actions.filter((a) => !a.done)
@@ -420,10 +427,22 @@ export function ProjectDashboard({
                   <p className="mt-1 text-xs text-muted-foreground">Les opportunités commerciales en cours</p>
                 </div>
                 <div className="flex flex-wrap gap-2">
+                  <Button variant="outline" className="h-auto gap-1.5 py-2" onClick={() => setShowOffer((v) => !v)} aria-pressed={showOffer} title={showOffer ? 'Masquer la colonne « Offre proposée »' : 'Afficher la colonne « Offre proposée »'}>
+                    {showOffer ? <EyeOff data-icon="inline-start" /> : <Eye data-icon="inline-start" />} Offre
+                  </Button>
                   <div className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2">
                     <Search className="size-4 text-slate-400" />
                     <input aria-label="Rechercher un prospect" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Rechercher..." className="w-32 bg-transparent text-sm outline-none placeholder:text-slate-400 sm:w-44" />
                   </div>
+                  <NativeSelect aria-label="Filtrer par responsable" value={ownerFilter} onChange={(e) => setOwnerFilter(e.target.value)} className="h-auto w-auto py-2">
+                    <option value="">Tous les responsables</option>
+                    {owners.map((owner) => (
+                      <option key={owner} value={owner}>
+                        {owner}
+                      </option>
+                    ))}
+                    {hasUnassigned && <option value={NO_OWNER}>Sans responsable</option>}
+                  </NativeSelect>
                   <NativeSelect aria-label="Filtrer par statut" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="h-auto w-auto py-2">
                     <option value="">Tous les statuts</option>
                     {PROSPECT_STATUSES.map((status) => (
@@ -441,20 +460,20 @@ export function ProjectDashboard({
                       <TableRow className="bg-slate-50/70 hover:bg-slate-50/70">
                         <TableHead className="pl-6">Institution / prospect</TableHead>
                         <TableHead>Contact</TableHead>
-                        <TableHead>Offre proposée</TableHead>
+                        {showOffer && <TableHead>Offre proposée</TableHead>}
                         <TableHead>Plateforme</TableHead>
                         <TableHead>Suivi</TableHead>
                         <TableHead>Statut / avancement</TableHead>
                         <TableHead>Prochaine action</TableHead>
                         <TableHead>Relance</TableHead>
-                        <TableHead className={editable ? '' : 'pr-6'}>Responsable</TableHead>
-                        {editable && <TableHead className="pr-6 text-right">Actions</TableHead>}
+                        <TableHead>Responsable</TableHead>
+                        <TableHead className="pr-6 text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {filteredProspects.length === 0 && (
                         <TableRow>
-                          <TableCell colSpan={editable ? 10 : 9} className="py-10 text-center text-sm text-muted-foreground">
+                          <TableCell colSpan={showOffer ? 10 : 9} className="py-10 text-center text-sm text-muted-foreground">
                             {prospects.length > 0 ? 'Aucun prospect ne correspond à la recherche.' : editable ? 'Aucun prospect. Ajoutez-en un avec « Nouveau prospect ».' : 'Aucun dossier ne vous a encore été assigné.'}
                           </TableCell>
                         </TableRow>
@@ -482,7 +501,7 @@ export function ProjectDashboard({
                               </button>
                             )}
                           </TableCell>
-                          <TableCell className="max-w-44 min-w-32 text-sm whitespace-normal text-slate-600">{item.offer}</TableCell>
+                          {showOffer && <TableCell className="max-w-44 min-w-32 text-sm whitespace-normal text-slate-600">{item.offer}</TableCell>}
                           <TableCell>
                             {item.platformUrl ? (
                               <a href={item.platformUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded-lg bg-primary/10 px-2 py-1 text-xs font-medium text-primary hover:bg-primary/15" title={item.platformUrl}>
@@ -500,9 +519,6 @@ export function ProjectDashboard({
                               <Button variant="outline" size="sm" className="gap-1.5" onClick={() => documentsEditor.openWith(item.id)} aria-label={`Documents de ${item.institution}`} title="Documents">
                                 <Paperclip data-icon="inline-start" /> {item.documents.length}
                               </Button>
-                              <a href={`/api/reports/prospects/${item.id}`} download className={buttonVariants({ variant: 'outline', size: 'icon-sm' })} aria-label={`Télécharger le rapport PDF de ${item.institution}`} title="Télécharger le rapport PDF">
-                                <FileDown />
-                              </a>
                             </div>
                           </TableCell>
                           <TableCell className="min-w-40">
@@ -523,18 +539,32 @@ export function ProjectDashboard({
                               </div>
                             )}
                           </TableCell>
-                          {editable && (
-                            <TableCell className="pr-6">
-                              <div className="flex justify-end gap-1">
-                                <Button variant="ghost" size="icon" aria-label={`Modifier ${item.institution}`} onClick={() => prospectEditor.openWith(item)}>
-                                  <Pencil />
-                                </Button>
-                                <Button variant="ghost" size="icon" className="text-slate-400 hover:text-destructive" aria-label={`Supprimer ${item.institution}`} onClick={() => deleteEditor.openWith({ kind: 'prospect', id: item.id, label: item.institution })}>
-                                  <Trash2 />
-                                </Button>
-                              </div>
-                            </TableCell>
-                          )}
+                          <TableCell className="pr-6 text-right">
+                            <Menu.Root>
+                              <Menu.Trigger className={buttonVariants({ variant: 'ghost', size: 'icon' })} aria-label={`Actions pour ${item.institution}`}>
+                                <MoreHorizontal />
+                              </Menu.Trigger>
+                              <Menu.Portal>
+                                <Menu.Positioner sideOffset={4} align="end" className="z-50">
+                                  <Menu.Popup className="min-w-48 rounded-xl border border-slate-200 bg-white p-1.5 text-sm shadow-lg outline-none transition-[opacity,transform] data-ending-style:scale-95 data-ending-style:opacity-0 data-starting-style:scale-95 data-starting-style:opacity-0">
+                                    <Menu.LinkItem href={`/api/reports/prospects/${item.id}`} download className="flex cursor-default items-center gap-2 rounded-lg px-2.5 py-2 outline-none data-highlighted:bg-slate-100">
+                                      <FileDown className="size-4 text-slate-500" /> Télécharger le rapport
+                                    </Menu.LinkItem>
+                                    {editable && (
+                                      <>
+                                        <Menu.Item onClick={() => prospectEditor.openWith(item)} className="flex cursor-default items-center gap-2 rounded-lg px-2.5 py-2 outline-none data-highlighted:bg-slate-100">
+                                          <Pencil className="size-4 text-slate-500" /> Modifier
+                                        </Menu.Item>
+                                        <Menu.Item onClick={() => deleteEditor.openWith({ kind: 'prospect', id: item.id, label: item.institution })} className="flex cursor-default items-center gap-2 rounded-lg px-2.5 py-2 text-destructive outline-none data-highlighted:bg-destructive/10">
+                                          <Trash2 className="size-4" /> Supprimer
+                                        </Menu.Item>
+                                      </>
+                                    )}
+                                  </Menu.Popup>
+                                </Menu.Positioner>
+                              </Menu.Portal>
+                            </Menu.Root>
+                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
