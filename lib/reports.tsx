@@ -1,6 +1,6 @@
 import { Document, Font, Page, renderToBuffer, StyleSheet, Text, View } from '@react-pdf/renderer'
 import { PIPELINE, progressOf } from '@/lib/progress'
-import { ROLE_LABELS, type Action, type Prospect, type ProspectStatus, type User } from '@/lib/types'
+import { canSeeContacts, ROLE_LABELS, type Action, type Prospect, type ProspectStatus, type User } from '@/lib/types'
 
 // Pas de coupure de mots avec tiret (« Proposition en-voyée »).
 Font.registerHyphenationCallback((word) => [word])
@@ -309,43 +309,45 @@ function ProspectDetail({ prospect, actions, ctx }: { prospect: Prospect; action
         </View>
       </View>
 
-      <View style={s.section}>
-        <SectionTitle title="Contacts" count={prospect.contacts.length} />
-        <Table
-          rows={prospect.contacts}
-          emptyLabel="Aucun contact enregistré."
-          columns={[
-            {
-              label: 'Nom / fonction',
-              width: '30%',
-              render: (c) => (
-                <View>
-                  <Text style={s.tdStrong}>{c.name}</Text>
-                  {c.title && <Text style={{ fontSize: 7.5, color: C.muted, marginTop: 1, paddingRight: 6 }}>{c.title}</Text>}
-                </View>
-              ),
-            },
-            {
-              label: 'Téléphones',
-              width: '34%',
-              render: (c) => (
-                <View>
-                  {(['phone1', 'phone2'] as const).map((key) =>
-                    c[key] ? (
-                      <Text key={key} style={s.td}>
-                        {c[key]}
-                        {c.whatsapp === key ? '  (WhatsApp)' : ''}
-                      </Text>
-                    ) : null,
-                  )}
-                  {!c.phone1 && !c.phone2 && <Text style={[s.td, { color: C.faint }]}>—</Text>}
-                </View>
-              ),
-            },
-            { label: 'E-mail', width: '36%', render: (c) => <Text style={s.td}>{c.email || '—'}</Text> },
-          ]}
-        />
-      </View>
+      {canSeeContacts(ctx.user.role) && (
+        <View style={s.section}>
+          <SectionTitle title="Contacts" count={prospect.contacts.length} />
+          <Table
+            rows={prospect.contacts}
+            emptyLabel="Aucun contact enregistré."
+            columns={[
+              {
+                label: 'Nom / fonction',
+                width: '30%',
+                render: (c) => (
+                  <View>
+                    <Text style={s.tdStrong}>{c.name}</Text>
+                    {c.title && <Text style={{ fontSize: 7.5, color: C.muted, marginTop: 1, paddingRight: 6 }}>{c.title}</Text>}
+                  </View>
+                ),
+              },
+              {
+                label: 'Téléphones',
+                width: '34%',
+                render: (c) => (
+                  <View>
+                    {(['phone1', 'phone2'] as const).map((key) =>
+                      c[key] ? (
+                        <Text key={key} style={s.td}>
+                          {c[key]}
+                          {c.whatsapp === key ? '  (WhatsApp)' : ''}
+                        </Text>
+                      ) : null,
+                    )}
+                    {!c.phone1 && !c.phone2 && <Text style={[s.td, { color: C.faint }]}>—</Text>}
+                  </View>
+                ),
+              },
+              { label: 'E-mail', width: '36%', render: (c) => <Text style={s.td}>{c.email || '—'}</Text> },
+            ]}
+          />
+        </View>
+      )}
 
       <View style={s.section}>
         <SectionTitle title="Parcours commercial" />
@@ -465,7 +467,7 @@ function ProspectReport({ prospect, actions, ctx }: { prospect: Prospect; action
           meta={[
             ['Date du rapport', ctx.generatedAt.split(' ')[0]],
             ['Responsable', prospect.owner || '—'],
-            ['Contact', prospect.contact || '—'],
+            ...(canSeeContacts(ctx.user.role) ? [['Contact', prospect.contact || '—'] as [string, string]] : []),
           ]}
         />
         {prospectKpis(prospect)}

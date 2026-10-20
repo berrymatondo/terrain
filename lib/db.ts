@@ -1,6 +1,6 @@
 import { neon } from '@neondatabase/serverless'
 import type { Action, ActionDue, Comment, Contact, Database, DocumentMeta, Member, Notification, Prospect, ProspectStatus, Role, StatusChange, User } from '@/lib/types'
-import { canEdit } from '@/lib/types'
+import { canEdit, canSeeContacts } from '@/lib/types'
 
 if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL manquant (voir .env.local)')
 
@@ -15,6 +15,7 @@ type ActionInput = Omit<Action, 'id' | 'done'>
  */
 export async function getDatabase(user: User): Promise<Database> {
   const restricted = !canEdit(user.role)
+  const hideContacts = !canSeeContacts(user.role)
   // Un « user » voit les dossiers qui lui sont assignés et ceux dont il est responsable.
   const [prospects, actions, assignments, documents, comments, history, contacts] = await Promise.all([
     sql`SELECT p.id, p.institution, p.contact, p.offer, p.status, p.next, to_char(p.date, 'YYYY-MM-DD') AS date,
@@ -45,8 +46,7 @@ export async function getDatabase(user: User): Promise<Database> {
         ORDER BY h.changed_at`,
     sql`SELECT c.prospect_id, c.name, c.title, c.phone1, c.phone2, c.whatsapp, c.email
         FROM prospect_contacts c
-        WHERE ${restricted}::boolean = false
-           OR c.prospect_id IN (SELECT prospect_id FROM prospect_assignments WHERE user_id = ${user.id} UNION SELECT id FROM prospects WHERE owner_id = ${user.id})
+        WHERE ${hideContacts}::boolean = false
         ORDER BY c.position`,
   ])
   const iso = (value: unknown) => (value ? new Date(value as string).toISOString() : null)
@@ -54,6 +54,7 @@ export async function getDatabase(user: User): Promise<Database> {
   return {
     prospects: prospects.map((p) => ({
       ...p,
+      contact: hideContacts ? '' : p.contact,
       // Un utilisateur restreint n'a pas besoin de savoir qui d'autre a accès au dossier.
       assigneeIds: restricted ? [] : assignments.filter((a) => a.prospect_id === p.id).map((a) => a.user_id),
       documents: documents

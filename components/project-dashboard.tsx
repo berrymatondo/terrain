@@ -4,8 +4,9 @@ import { useMemo, useState, useTransition } from 'react'
 import { Menu } from '@base-ui/react/menu'
 import { CalendarDays, ChevronDown, CircleCheck, Clock3, Eye, EyeOff, ExternalLink, FileDown, FileText, KeyRound, LayoutDashboard, LogOut, MessageSquare, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Paperclip, Pencil, Plus, RotateCcw, Search, Settings2, Target, Trash2, UserCog, Users } from 'lucide-react'
 import { logout, toggleActionDone } from '@/app/actions'
-import { ActionDialog, DeleteDialog, DocumentsDialog, PasswordDialog, ProspectDialog, UserDialog, type DeleteTarget } from '@/components/crud-dialogs'
+import { ActionDialog, DeleteDialog, DocumentsDialog, PasswordDialog, ReportPreviewDialog, ProspectDialog, UserDialog, type DeleteTarget } from '@/components/crud-dialogs'
 import { NotificationBell } from '@/components/notification-bell'
+import { ThemeToggle } from '@/components/theme-toggle'
 import { ProgressBar, ProspectDetailDialog } from '@/components/prospect-detail-dialog'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
@@ -17,7 +18,7 @@ import { NativeSelect } from '@/components/ui/field'
 import { Separator } from '@/components/ui/separator'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { canEdit, canManageUsers, PROSPECT_STATUSES, ROLE_LABELS, type Action, type ActionDue, type Member, type Notification, type Prospect, type ProspectStatus, type Role, type User } from '@/lib/types'
+import { canEdit, canManageUsers, canSeeContacts, PROSPECT_STATUSES, ROLE_LABELS, type Action, type ActionDue, type Member, type Notification, type Prospect, type ProspectStatus, type Role, type User } from '@/lib/types'
 
 const roleStyles: Record<Role, string> = {
   admin: 'bg-violet-100 text-violet-700 border-violet-200',
@@ -114,8 +115,10 @@ export function ProjectDashboard({
   const deleteEditor = useEditor<DeleteTarget>()
   const documentsEditor = useEditor<string>()
   const detailEditor = useEditor<string>()
+  const reportEditor = useEditor<string>()
   const userNames = useMemo(() => new Map(assignableUsers.map((u) => [u.id, u.name])), [assignableUsers])
   const editable = canEdit(currentUser.role)
+  const showContacts = canSeeContacts(currentUser.role)
   const isAdmin = canManageUsers(currentUser.role)
 
   // Sur mobile, le menu s'ouvre en panneau par-dessus le contenu et n'est jamais réduit.
@@ -168,10 +171,10 @@ export function ProjectDashboard({
   ]
 
   return (
-    <div className="min-h-screen bg-[#f4f6fb] text-slate-900">
-      {mobileOpen && <div className="fixed inset-0 z-30 bg-slate-950/40 backdrop-blur-sm lg:hidden" onClick={() => setMobileOpen(false)} aria-hidden />}
+    <div className="min-h-screen bg-[#f4f6fb] text-slate-900 dark:bg-background">
+      {mobileOpen && <div className="fixed inset-0 z-30 bg-black/50 backdrop-blur-sm lg:hidden" onClick={() => setMobileOpen(false)} aria-hidden />}
       <aside
-        className={`fixed inset-y-0 left-0 z-40 flex flex-col overflow-y-auto bg-[#0b1a30] py-6 text-slate-400 transition-[width,translate] duration-200 lg:translate-x-0 ${mobileOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full'} ${compact ? 'w-16 px-2.5' : 'w-64 px-4'}`}
+        className={`keep-colors fixed inset-y-0 left-0 z-40 flex flex-col overflow-y-auto bg-[#0b1a30] py-6 text-slate-400 transition-[width,translate] duration-200 lg:translate-x-0 ${mobileOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full'} ${compact ? 'w-16 px-2.5' : 'w-64 px-4'}`}
       >
         <div className={`flex items-center gap-3 ${compact ? 'justify-center' : 'px-2'}`}>
           <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-linear-to-br from-blue-500 to-indigo-600 font-bold text-white shadow-lg shadow-blue-900/40">E</div>
@@ -231,7 +234,7 @@ export function ProjectDashboard({
       </aside>
 
       <main className={`transition-[padding] duration-200 ${collapsed ? 'lg:pl-16' : 'lg:pl-64'}`}>
-        <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-slate-200/70 bg-white/80 px-5 backdrop-blur-xl sm:px-8">
+        <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-slate-200/70 bg-card/80 px-5 backdrop-blur-xl sm:px-8">
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="icon" className="text-slate-500" onClick={toggleMenu} aria-label={collapsed ? 'Déplier le menu' : 'Réduire le menu'} title={collapsed ? 'Déplier le menu' : 'Réduire le menu'}>
               {collapsed ? <PanelLeftOpen /> : <PanelLeftClose />}
@@ -249,6 +252,7 @@ export function ProjectDashboard({
                 <Eye /> Lecture seule
               </Badge>
             )}
+            <ThemeToggle />
             <NotificationBell
               initial={notifications}
               onOpenProspect={(prospectId) => {
@@ -268,7 +272,7 @@ export function ProjectDashboard({
               </Menu.Trigger>
               <Menu.Portal>
                 <Menu.Positioner sideOffset={8} align="end" className="z-50">
-                  <Menu.Popup className="min-w-60 rounded-xl border border-slate-200 bg-white p-1.5 text-sm shadow-lg outline-none transition-[opacity,transform] data-ending-style:scale-95 data-ending-style:opacity-0 data-starting-style:scale-95 data-starting-style:opacity-0">
+                  <Menu.Popup className="min-w-60 rounded-xl border border-slate-200 bg-card p-1.5 text-sm shadow-lg outline-none transition-[opacity,transform] data-ending-style:scale-95 data-ending-style:opacity-0 data-starting-style:scale-95 data-starting-style:opacity-0">
                     <div className="px-2.5 py-2">
                       <p className="font-medium">{currentUser.name}</p>
                       <p className="truncate text-xs text-muted-foreground">{currentUser.email}</p>
@@ -303,7 +307,7 @@ export function ProjectDashboard({
           ) : (
           <>
           {/* Bannière */}
-          <section className="relative mb-6 overflow-hidden rounded-3xl bg-linear-to-br from-[#0b1a30] via-[#132f57] to-blue-700 p-6 text-white shadow-xl shadow-blue-950/10 sm:p-8">
+          <section className="keep-colors relative mb-6 overflow-hidden rounded-3xl bg-linear-to-br from-[#0b1a30] via-[#132f57] to-blue-700 p-6 text-white shadow-xl shadow-blue-950/10 sm:p-8">
             <div className="pointer-events-none absolute -top-24 -right-16 size-72 rounded-full bg-blue-400/25 blur-3xl" aria-hidden />
             <div className="pointer-events-none absolute -bottom-32 left-1/3 size-72 rounded-full bg-indigo-500/20 blur-3xl" aria-hidden />
             <div className="relative flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
@@ -401,10 +405,10 @@ export function ProjectDashboard({
 
           <Tabs value={showActions ? 'Actions' : 'Prospects'} onValueChange={(v) => setActiveTab(v === 'Actions' ? 'Actions à mener' : 'Vue d’ensemble')} className="mt-8">
             <TabsList className="h-10 rounded-xl bg-slate-200/60 p-1">
-              <TabsTrigger value="Prospects" className="rounded-lg px-4 data-active:bg-white data-active:text-slate-900 data-active:shadow-sm">
+              <TabsTrigger value="Prospects" className="rounded-lg px-4 data-active:bg-card data-active:text-slate-900 data-active:shadow-sm">
                 Portefeuille prospects
               </TabsTrigger>
-              <TabsTrigger value="Actions" className="rounded-lg px-4 data-active:bg-white data-active:text-slate-900 data-active:shadow-sm">
+              <TabsTrigger value="Actions" className="rounded-lg px-4 data-active:bg-card data-active:text-slate-900 data-active:shadow-sm">
                 Actions à mener <span className="ml-1.5 rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold text-white">{pendingActions.length}</span>
               </TabsTrigger>
             </TabsList>
@@ -459,7 +463,7 @@ export function ProjectDashboard({
                     <TableHeader>
                       <TableRow className="bg-slate-50/70 hover:bg-slate-50/70">
                         <TableHead className="pl-6">Institution / prospect</TableHead>
-                        <TableHead>Contact</TableHead>
+                        {showContacts && <TableHead>Contact</TableHead>}
                         {showOffer && <TableHead>Offre proposée</TableHead>}
                         <TableHead>Plateforme</TableHead>
                         <TableHead>Suivi</TableHead>
@@ -473,7 +477,7 @@ export function ProjectDashboard({
                     <TableBody>
                       {filteredProspects.length === 0 && (
                         <TableRow>
-                          <TableCell colSpan={showOffer ? 10 : 9} className="py-10 text-center text-sm text-muted-foreground">
+                          <TableCell colSpan={8 + Number(showOffer) + Number(showContacts)} className="py-10 text-center text-sm text-muted-foreground">
                             {prospects.length > 0 ? 'Aucun prospect ne correspond à la recherche.' : editable ? 'Aucun prospect. Ajoutez-en un avec « Nouveau prospect ».' : 'Aucun dossier ne vous a encore été assigné.'}
                           </TableCell>
                         </TableRow>
@@ -491,16 +495,18 @@ export function ProjectDashboard({
                               </p>
                             )}
                           </TableCell>
-                          <TableCell className="text-sm text-slate-600">
-                            {item.contacts.length === 0 ? (
-                              <span className="text-slate-400">—</span>
-                            ) : (
-                              <button onClick={() => detailEditor.openWith(item.id)} className="text-left hover:text-primary" title={item.contacts.map((c) => c.name).join(', ')}>
-                                {item.contacts[0].name}
-                                {item.contacts.length > 1 && <span className="ml-1.5 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">+{item.contacts.length - 1}</span>}
-                              </button>
-                            )}
-                          </TableCell>
+                          {showContacts && (
+                            <TableCell className="text-sm text-slate-600">
+                              {item.contacts.length === 0 ? (
+                                <span className="text-slate-400">—</span>
+                              ) : (
+                                <button onClick={() => detailEditor.openWith(item.id)} className="text-left hover:text-primary" title={item.contacts.map((c) => c.name).join(', ')}>
+                                  {item.contacts[0].name}
+                                  {item.contacts.length > 1 && <span className="ml-1.5 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">+{item.contacts.length - 1}</span>}
+                                </button>
+                              )}
+                            </TableCell>
+                          )}
                           {showOffer && <TableCell className="max-w-44 min-w-32 text-sm whitespace-normal text-slate-600">{item.offer}</TableCell>}
                           <TableCell>
                             {item.platformUrl ? (
@@ -539,31 +545,36 @@ export function ProjectDashboard({
                               </div>
                             )}
                           </TableCell>
-                          <TableCell className="pr-6 text-right">
-                            <Menu.Root>
-                              <Menu.Trigger className={buttonVariants({ variant: 'ghost', size: 'icon' })} aria-label={`Actions pour ${item.institution}`}>
-                                <MoreHorizontal />
-                              </Menu.Trigger>
-                              <Menu.Portal>
-                                <Menu.Positioner sideOffset={4} align="end" className="z-50">
-                                  <Menu.Popup className="min-w-48 rounded-xl border border-slate-200 bg-white p-1.5 text-sm shadow-lg outline-none transition-[opacity,transform] data-ending-style:scale-95 data-ending-style:opacity-0 data-starting-style:scale-95 data-starting-style:opacity-0">
-                                    <Menu.LinkItem href={`/api/reports/prospects/${item.id}`} download className="flex cursor-default items-center gap-2 rounded-lg px-2.5 py-2 outline-none data-highlighted:bg-slate-100">
-                                      <FileDown className="size-4 text-slate-500" /> Télécharger le rapport
-                                    </Menu.LinkItem>
-                                    {editable && (
-                                      <>
-                                        <Menu.Item onClick={() => prospectEditor.openWith(item)} className="flex cursor-default items-center gap-2 rounded-lg px-2.5 py-2 outline-none data-highlighted:bg-slate-100">
-                                          <Pencil className="size-4 text-slate-500" /> Modifier
-                                        </Menu.Item>
-                                        <Menu.Item onClick={() => deleteEditor.openWith({ kind: 'prospect', id: item.id, label: item.institution })} className="flex cursor-default items-center gap-2 rounded-lg px-2.5 py-2 text-destructive outline-none data-highlighted:bg-destructive/10">
-                                          <Trash2 className="size-4" /> Supprimer
-                                        </Menu.Item>
-                                      </>
-                                    )}
-                                  </Menu.Popup>
-                                </Menu.Positioner>
-                              </Menu.Portal>
-                            </Menu.Root>
+                          <TableCell className="pr-6">
+                              <div className="flex justify-end gap-1">
+                              <Button variant="ghost" size="icon" onClick={() => reportEditor.openWith(item.id)} aria-label={`Aperçu du rapport de ${item.institution}`} title="Aperçu du rapport">
+                                <Eye />
+                              </Button>
+                              <Menu.Root>
+                                <Menu.Trigger className={buttonVariants({ variant: 'ghost', size: 'icon' })} aria-label={`Actions pour ${item.institution}`}>
+                                  <MoreHorizontal />
+                                </Menu.Trigger>
+                                <Menu.Portal>
+                                  <Menu.Positioner sideOffset={4} align="end" className="z-50">
+                                    <Menu.Popup className="min-w-48 rounded-xl border border-slate-200 bg-card p-1.5 text-sm shadow-lg outline-none transition-[opacity,transform] data-ending-style:scale-95 data-ending-style:opacity-0 data-starting-style:scale-95 data-starting-style:opacity-0">
+                                      <Menu.LinkItem href={`/api/reports/prospects/${item.id}`} download className="flex cursor-default items-center gap-2 rounded-lg px-2.5 py-2 outline-none data-highlighted:bg-slate-100">
+                                        <FileDown className="size-4 text-slate-500" /> Télécharger le rapport
+                                      </Menu.LinkItem>
+                                      {editable && (
+                                        <>
+                                          <Menu.Item onClick={() => prospectEditor.openWith(item)} className="flex cursor-default items-center gap-2 rounded-lg px-2.5 py-2 outline-none data-highlighted:bg-slate-100">
+                                            <Pencil className="size-4 text-slate-500" /> Modifier
+                                          </Menu.Item>
+                                          <Menu.Item onClick={() => deleteEditor.openWith({ kind: 'prospect', id: item.id, label: item.institution })} className="flex cursor-default items-center gap-2 rounded-lg px-2.5 py-2 text-destructive outline-none data-highlighted:bg-destructive/10">
+                                            <Trash2 className="size-4" /> Supprimer
+                                          </Menu.Item>
+                                        </>
+                                      )}
+                                    </Menu.Popup>
+                                  </Menu.Positioner>
+                                </Menu.Portal>
+                              </Menu.Root>
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))}
@@ -589,6 +600,7 @@ export function ProjectDashboard({
       <PasswordDialog open={passwordEditor.open} onOpenChange={passwordEditor.setOpen} formKey={passwordEditor.key} />
       {/* Prospect relu depuis les props pour refléter les documents ajoutés ou supprimés. */}
       <DocumentsDialog open={documentsEditor.open} onOpenChange={documentsEditor.setOpen} prospect={prospects.find((p) => p.id === documentsEditor.item)} editable={editable} />
+      <ReportPreviewDialog open={reportEditor.open} onOpenChange={reportEditor.setOpen} prospect={prospects.find((p) => p.id === reportEditor.item)} />
       <ProspectDetailDialog open={detailEditor.open} onOpenChange={detailEditor.setOpen} prospect={prospects.find((p) => p.id === detailEditor.item)} currentUser={currentUser} />
     </div>
   )
@@ -604,7 +616,7 @@ const accents = {
 function StatCard({ label, value, change, icon: Icon, accent = 'blue' }: { label: string; value: number; change: string; icon: React.ElementType; accent?: keyof typeof accents }) {
   const a = accents[accent]
   return (
-    <div className="group relative overflow-hidden rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70 transition duration-200 hover:-translate-y-0.5 hover:shadow-md">
+    <div className="group relative overflow-hidden rounded-2xl bg-card p-5 shadow-sm ring-1 ring-slate-200/70 transition duration-200 hover:-translate-y-0.5 hover:shadow-md">
       <div className={`pointer-events-none absolute -top-10 -right-10 size-32 rounded-full bg-radial ${a.glow} to-transparent opacity-0 transition-opacity group-hover:opacity-100`} aria-hidden />
       <div className="relative flex items-start justify-between">
         <p className="text-sm font-medium text-slate-500">{label}</p>
@@ -652,7 +664,7 @@ function PipelineChart({ data, total }: { data: { status: ProspectStatus; count:
             </div>
             <span className={`text-right text-sm font-semibold tabular-nums ${count ? 'text-slate-900' : 'text-slate-300'}`}>{count}</span>
             {/* Info-bulle */}
-            <span role="tooltip" className="pointer-events-none absolute -top-8 right-10 z-10 rounded-lg bg-slate-900 px-2.5 py-1 text-xs whitespace-nowrap text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
+            <span role="tooltip" className="pointer-events-none absolute -top-8 right-10 z-10 rounded-lg bg-foreground px-2.5 py-1 text-xs whitespace-nowrap text-background opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
               {status} : {count} prospect{count > 1 ? 's' : ''} · {share} %
             </span>
           </li>

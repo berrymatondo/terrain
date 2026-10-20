@@ -7,6 +7,7 @@ import { changeOwnPassword, deleteAction, deleteDocument, deleteProspect, delete
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Field, Input, NativeSelect, Textarea } from '@/components/ui/field'
+import { PdfViewer } from '@/components/pdf-viewer'
 import { previewOf } from '@/lib/documents'
 import { ACTION_DUE_LABELS, LEGACY_OWNER, MAX_CONTACTS, MAX_DOCUMENT_SIZE, PROSPECT_STATUSES, ROLE_DESCRIPTIONS, ROLE_LABELS, ROLES, type Action, type Contact, type DocumentMeta, type Member, type MutationResult, type Prospect, type User } from '@/lib/types'
 
@@ -103,7 +104,7 @@ function ContactsEditor({ initial }: { initial?: Contact[] }) {
                 <Field key={phone} label={`Téléphone ${n + 1}`} htmlFor={id(phone)}>
                   <div className="flex items-center gap-2">
                     <Input id={id(phone)} type="tel" value={contact[phone]} onChange={(e) => update(index, { [phone]: e.target.value })} placeholder="+243 …" />
-                    <label className={`flex shrink-0 cursor-pointer items-center gap-1 rounded-lg border px-2 py-1.5 text-xs transition-colors ${contact.whatsapp === phone ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-white text-slate-500'}`} title="Numéro utilisé pour WhatsApp">
+                    <label className={`flex shrink-0 cursor-pointer items-center gap-1 rounded-lg border px-2 py-1.5 text-xs transition-colors ${contact.whatsapp === phone ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-card text-slate-500'}`} title="Numéro utilisé pour WhatsApp">
                       <input
                         type="checkbox"
                         className="size-3.5 accent-emerald-600"
@@ -395,7 +396,7 @@ function DocumentPreview({ doc, position, onBack, onPrevious, onNext }: { doc: D
       </div>
 
       <div className="flex h-[min(72vh,800px)] items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
-        {preview?.kind === 'pdf' && <iframe key={doc.id} src={src} title={doc.name} className="size-full bg-white" />}
+        {preview?.kind === 'pdf' && <PdfViewer key={doc.id} src={src} downloadHref={`${src}?download`} title={doc.name} />}
         {preview?.kind === 'text' && <iframe key={doc.id} src={src} title={doc.name} sandbox="" className="size-full bg-white" />}
         {/* eslint-disable-next-line @next/next/no-img-element -- fichier privé servi par l'API, pas d'optimisation possible */}
         {preview?.kind === 'image' && <img key={doc.id} src={src} alt={doc.name} className="max-h-full max-w-full object-contain" />}
@@ -403,7 +404,7 @@ function DocumentPreview({ doc, position, onBack, onPrevious, onNext }: { doc: D
         {preview?.kind === 'audio' && <audio key={doc.id} src={src} controls className="w-4/5" />}
         {!preview && (
           <div className="flex max-w-sm flex-col items-center gap-3 p-6 text-center">
-            <div className="flex size-12 items-center justify-center rounded-2xl bg-white text-slate-400 shadow-sm">
+            <div className="flex size-12 items-center justify-center rounded-2xl bg-card text-slate-400 shadow-sm">
               <FileText className="size-6" />
             </div>
             <p className="text-sm font-medium text-slate-700">Aperçu non disponible pour ce type de fichier</p>
@@ -415,6 +416,40 @@ function DocumentPreview({ doc, position, onBack, onPrevious, onNext }: { doc: D
         )}
       </div>
     </div>
+  )
+}
+
+/* ---------- Aperçu du rapport ---------- */
+
+/** Affiche le rapport PDF d'un prospect dans la page, sans le télécharger. */
+export function ReportPreviewDialog({ open, onOpenChange, prospect }: Omit<DialogProps, 'formKey'> & { prospect?: Prospect }) {
+  const src = prospect && `/api/reports/prospects/${prospect.id}`
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-5xl">
+        <div className="flex min-w-0 flex-col gap-3">
+          <div className="flex flex-wrap items-center gap-2 pr-8">
+            <div className="min-w-0 flex-1">
+              <DialogTitle className="truncate text-sm">Rapport · {prospect?.institution}</DialogTitle>
+              <DialogDescription className="text-xs">Aperçu du rapport PDF</DialogDescription>
+            </div>
+            {src && (
+              <div className="flex items-center gap-1">
+                <a href={`${src}?preview`} target="_blank" rel="noopener" className={buttonVariants({ variant: 'ghost', size: 'icon' })} aria-label="Ouvrir dans un nouvel onglet" title="Ouvrir dans un nouvel onglet">
+                  <ExternalLink />
+                </a>
+                <a href={src} download className={buttonVariants({ variant: 'outline', size: 'sm' })}>
+                  <Download data-icon="inline-start" /> Télécharger
+                </a>
+              </div>
+            )}
+          </div>
+          <div className="h-[min(78vh,900px)] overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
+            {src && <PdfViewer key={src} src={`${src}?preview`} downloadHref={src} title={`Rapport ${prospect?.institution}`} />}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 

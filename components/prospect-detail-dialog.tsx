@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/field'
 import { PIPELINE, progressOf } from '@/lib/progress'
-import { canModifyComment, MAX_COMMENT_LENGTH, whatsappLink, type Comment, type Prospect, type User } from '@/lib/types'
+import { canModifyComment, canSeeContacts, MAX_COMMENT_LENGTH, whatsappLink, type Comment, type Prospect, type User } from '@/lib/types'
 
 function initials(name: string) {
   const words = name.replace(/[^\p{L}\s-]/gu, ' ').split(/[\s-]+/).filter((w) => w.length > 1)
@@ -55,7 +55,7 @@ function Pipeline({ prospect }: { prospect: Prospect }) {
             {index < PIPELINE.length - 1 && <span className={`absolute top-6 left-[11px] h-[calc(100%-1.25rem)] w-0.5 ${done ? 'bg-primary' : 'bg-slate-200'}`} />}
             <span
               className={`relative z-10 flex size-6 shrink-0 items-center justify-center rounded-full border-2 text-[10px] font-semibold ${
-                done ? 'border-primary bg-primary text-white' : active ? 'border-primary bg-white text-primary' : 'border-slate-200 bg-white text-slate-400'
+                done ? 'border-primary bg-primary text-white' : active ? 'border-primary bg-card text-primary' : 'border-slate-200 bg-card text-slate-400'
               }`}
             >
               {done ? <Check className="size-3" /> : index + 1}
@@ -204,7 +204,7 @@ function CommentForm({ prospectId }: { prospectId: string }) {
 
 /* ---------- Institution et contacts ---------- */
 
-function InstitutionCard({ prospect }: { prospect: Prospect }) {
+function InstitutionCard({ prospect, showContacts }: { prospect: Prospect; showContacts: boolean }) {
   const links = [
     prospect.platformUrl && { href: prospect.platformUrl, label: 'Accéder à la plateforme', icon: MonitorSmartphone, primary: true },
     prospect.website && { href: prospect.website, label: prospect.website.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, ''), icon: Globe, primary: false },
@@ -234,12 +234,12 @@ function InstitutionCard({ prospect }: { prospect: Prospect }) {
         )}
       </div>
 
-      {prospect.contacts.length === 0 ? (
+      {showContacts && (prospect.contacts.length === 0 ? (
         <p className="text-sm text-slate-400">Aucun contact enregistré.</p>
       ) : (
         <ul className="grid gap-2 sm:grid-cols-2">
           {prospect.contacts.map((c, i) => (
-            <li key={i} className="flex gap-3 rounded-lg bg-white p-3 ring-1 ring-slate-200/70">
+            <li key={i} className="flex gap-3 rounded-lg bg-card p-3 ring-1 ring-slate-200/70">
               <Avatar className="size-8 shrink-0">
                 <AvatarFallback className="bg-primary/10 text-[10px] font-semibold text-primary">{initials(c.name)}</AvatarFallback>
               </Avatar>
@@ -274,7 +274,7 @@ function InstitutionCard({ prospect }: { prospect: Prospect }) {
             </li>
           ))}
         </ul>
-      )}
+      ))}
     </section>
   )
 }
@@ -297,7 +297,7 @@ export function ProspectDetailDialog({ open, onOpenChange, prospect, currentUser
               <DialogDescription>{[prospect.offer, prospect.owner && `Responsable : ${prospect.owner}`].filter(Boolean).join(' · ') || 'Suivi du prospect'}</DialogDescription>
             </DialogHeader>
 
-            <InstitutionCard prospect={prospect} />
+            <InstitutionCard prospect={prospect} showContacts={canSeeContacts(currentUser.role)} />
 
             <div className="grid gap-6 md:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
               <section className="flex flex-col gap-4">

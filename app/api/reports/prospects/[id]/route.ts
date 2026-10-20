@@ -4,8 +4,8 @@ import { getDatabase } from '@/lib/db'
 import { renderProspectReport } from '@/lib/reports'
 import { canEdit } from '@/lib/types'
 
-/** Rapport PDF complet d'un projet. Un « user » n'obtient que les dossiers qui lui sont assignés. */
-export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+/** Rapport PDF complet d'un projet (`?preview` pour l'afficher dans le navigateur). Un « user » n'obtient que les dossiers qui lui sont assignés. */
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getCurrentUser()
   if (!user) return new Response('Non authentifié', { status: 401 })
 
@@ -15,5 +15,5 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   if (!prospect) return new Response('Projet introuvable', { status: 404 })
 
   const pdf = await renderProspectReport(prospect, actions, user, userNames, canEdit(user.role))
-  return pdfResponse(pdf, reportFilename(prospect.institution))
+  return pdfResponse(pdf, reportFilename(prospect.institution), new URL(request.url).searchParams.has('preview'))
 }

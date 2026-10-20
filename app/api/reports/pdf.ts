@@ -6,14 +6,14 @@ export async function reportUserNames(user: User) {
   return canEdit(user.role) ? new Map((await getAssignableUsers()).map((u) => [u.id, u.name])) : new Map<string, string>()
 }
 
-/** Les rapports sont toujours proposés en téléchargement, jamais affichés dans le navigateur. */
-export function pdfResponse(pdf: Buffer, filename: string) {
+/** Les rapports sont proposés en téléchargement, sauf en aperçu (`inline`) où le navigateur les affiche. */
+export function pdfResponse(pdf: Buffer, filename: string, inline = false) {
   // Nom ASCII de repli pour les navigateurs qui ignorent filename*.
   const fallback = filename.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\x20-\x7e]/g, '_').replace(/"/g, '')
   return new Response(new Uint8Array(pdf), {
     headers: {
       'Content-Type': 'application/pdf',
-      'Content-Disposition': `attachment; filename="${fallback}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
+      'Content-Disposition': `${inline ? 'inline' : 'attachment'}; filename="${fallback}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
       'Content-Length': String(pdf.length),
       'Cache-Control': 'private, no-store',
     },

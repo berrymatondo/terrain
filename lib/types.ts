@@ -121,6 +121,9 @@ export type User = {
 /** Admin et Manager peuvent créer, modifier et supprimer prospects et actions. */
 export const canEdit = (role: Role) => role === 'admin' || role === 'manager'
 
+/** Les coordonnées des contacts ne sont pas communiquées aux « Utilisateurs ». */
+export const canSeeContacts = (role: Role) => canEdit(role)
+
 export const canManageUsers = (role: Role) => role === 'admin'
 
 /** Compte sélectionnable comme responsable. */
