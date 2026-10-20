@@ -1,10 +1,28 @@
-import { neon } from '@neondatabase/serverless'
+import { neon, type NeonQueryFunction } from '@neondatabase/serverless'
 import type { Action, ActionDue, Comment, Contact, Database, DocumentMeta, ManualPriority, Member, Notification, Prospect, ProspectStatus, Role, StatusChange, User } from '@/lib/types'
 import { canEdit, canSeeContacts } from '@/lib/types'
 
-if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL manquant (voir .env.local)')
+let client: NeonQueryFunction<false, false> | undefined
 
-const sql = neon(process.env.DATABASE_URL)
+/**
+ * Connexion créée à la première requête, pas au chargement du module : le build
+ * (« collecting page data ») importe toutes les routes sans avoir besoin de la base.
+ */
+function db() {
+  if (!client) {
+    if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL manquant (voir .env.local)')
+    client = neon(process.env.DATABASE_URL)
+  }
+  return client
+}
+
+const sql = new Proxy((() => {}) as unknown as NeonQueryFunction<false, false>, {
+  apply: (_target, _this, args) => Reflect.apply(db(), undefined, args),
+  get: (_target, prop) => {
+    const value = Reflect.get(db(), prop)
+    return typeof value === 'function' ? value.bind(db()) : value
+  },
+})
 
 type ProspectInput = Omit<Prospect, 'id' | 'assigneeIds' | 'documents' | 'comments' | 'history'>
 type ActionInput = Omit<Action, 'id' | 'done'>
