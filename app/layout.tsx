@@ -1,6 +1,8 @@
 import { Analytics } from "@vercel/analytics/next";
 import type { Metadata, Viewport } from "next";
-import { THEME_SCRIPT } from "@/components/theme-toggle";
+import { cookies } from "next/headers";
+import { ThemeSync } from "@/components/theme-toggle";
+import { parseTheme, THEME_COOKIE } from "@/lib/theme";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -35,17 +37,17 @@ export const viewport: Viewport = {
   ],
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const theme = parseTheme((await cookies()).get(THEME_COOKIE)?.value);
   return (
-    <html lang="fr" suppressHydrationWarning>
-      <head>
-        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
-      </head>
+    // « Système » est résolu côté navigateur par <ThemeSync />, d'où suppressHydrationWarning.
+    <html lang="fr" data-theme={theme} className={theme === "dark" ? "dark" : undefined} suppressHydrationWarning>
       <body className="antialiased" cz-shortcut-listen="true">
+        <ThemeSync />
         {children}
         {process.env.NODE_ENV === "production" && <Analytics />}
       </body>

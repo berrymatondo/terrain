@@ -13,6 +13,11 @@ export const PROSPECT_STATUSES = [
 
 export type ProspectStatus = (typeof PROSPECT_STATUSES)[number]
 
+/** Niveaux de priorité qu'un éditeur peut imposer à la place du classement automatique. */
+export const MANUAL_PRIORITIES = ['Haute', 'Moyenne', 'Basse'] as const
+
+export type ManualPriority = (typeof MANUAL_PRIORITIES)[number]
+
 export const ACTION_DUE_LABELS = ['Prioritaire', 'Cette semaine', 'À planifier', 'À relancer', 'À préparer'] as const
 
 export type ActionDue = (typeof ACTION_DUE_LABELS)[number]
@@ -22,6 +27,10 @@ export type Prospect = {
   institution: string
   contact: string
   offer: string
+  /** Potentiel financier estimé du projet, en USD ; null si non renseigné. */
+  amount: number | null
+  /** Priorité fixée à la main ; null = classement automatique. */
+  priority: ManualPriority | null
   status: ProspectStatus
   next: string
   /** Date de relance au format ISO (YYYY-MM-DD) */

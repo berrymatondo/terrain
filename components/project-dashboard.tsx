@@ -2,15 +2,16 @@
 
 import { useMemo, useState, useTransition } from 'react'
 import { Menu } from '@base-ui/react/menu'
-import { CalendarDays, ChevronDown, CircleCheck, Clock3, Eye, EyeOff, ExternalLink, FileDown, FileText, KeyRound, LayoutDashboard, LogOut, MessageSquare, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Paperclip, Pencil, Plus, RotateCcw, Search, Settings2, Target, Trash2, UserCog, Users } from 'lucide-react'
-import { logout, toggleActionDone } from '@/app/actions'
+import { CalendarDays, Check, ChevronDown, CircleCheck, Clock3, Eye, EyeOff, ExternalLink, FileDown, FileText, Flame, KeyRound, LayoutDashboard, LogOut, MessageSquare, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Paperclip, Pencil, Pin, Plus, RotateCcw, Search, Settings2, Target, Trash2, UserCog, Users } from 'lucide-react'
+import { logout, toggleActionDone, updateProspectPriority } from '@/app/actions'
 import { ActionDialog, DeleteDialog, DocumentsDialog, PasswordDialog, ReportPreviewDialog, ProspectDialog, UserDialog, type DeleteTarget } from '@/components/crud-dialogs'
 import { NotificationBell } from '@/components/notification-bell'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { ProgressBar, ProspectDetailDialog } from '@/components/prospect-detail-dialog'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { Badge } from '@/components/ui/badge'
+import { Badge, badgeVariants } from '@/components/ui/badge'
 import { Button, buttonVariants } from '@/components/ui/button'
+import { CLOSED_STATUSES, formatAmount, rankProspects, sortByPriority, type Priority, type PriorityTier } from '@/lib/priority'
 import { PIPELINE, progressOf } from '@/lib/progress'
 import { cn } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -18,7 +19,7 @@ import { NativeSelect } from '@/components/ui/field'
 import { Separator } from '@/components/ui/separator'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { canEdit, canManageUsers, canSeeContacts, PROSPECT_STATUSES, ROLE_LABELS, type Action, type ActionDue, type Member, type Notification, type Prospect, type ProspectStatus, type Role, type User } from '@/lib/types'
+import { canEdit, canManageUsers, canSeeContacts, MANUAL_PRIORITIES, type ManualPriority, PROSPECT_STATUSES, ROLE_LABELS, type Action, type ActionDue, type Member, type Notification, type Prospect, type ProspectStatus, type Role, type User } from '@/lib/types'
 
 const roleStyles: Record<Role, string> = {
   admin: 'bg-violet-100 text-violet-700 border-violet-200',
@@ -48,7 +49,12 @@ const dueTones: Record<ActionDue, string> = {
 }
 
 const PROPOSAL_STATUSES: ProspectStatus[] = ['Proposition envoyée', 'En négociation', 'En attente de la signature', 'Signé']
-const CLOSED_STATUSES: ProspectStatus[] = ['Signé', 'Perdu']
+const tierStyles: Record<PriorityTier, string> = {
+  Haute: 'border-rose-200 bg-rose-50 text-rose-700',
+  Moyenne: 'border-amber-200 bg-amber-50 text-amber-700',
+  Basse: 'border-slate-200 bg-slate-50 text-slate-500',
+  Clôturé: 'border-slate-200 bg-transparent text-slate-400',
+}
 
 function initials(name: string) {
   const words = name.replace(/[^\p{L}\s-]/gu, ' ').split(/[\s-]+/).filter((w) => w.length > 1)
@@ -108,6 +114,7 @@ export function ProjectDashboard({
   const [statusFilter, setStatusFilter] = useState('')
   const [ownerFilter, setOwnerFilter] = useState('')
   const [showOffer, setShowOffer] = useState(false)
+  const [sortMode, setSortMode] = useState<'priority' | 'recent'>('priority')
   const prospectEditor = useEditor<Prospect>()
   const actionEditor = useEditor<Action>()
   const userEditor = useEditor<User>()
@@ -139,16 +146,19 @@ export function ProjectDashboard({
 
   const owners = useMemo(() => [...new Set(prospects.map((p) => p.owner).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'fr')), [prospects])
   const hasUnassigned = prospects.some((p) => !p.owner)
-  const filteredProspects = useMemo(
-    () =>
-      prospects.filter(
+  const today = todayIso()
+  const priorities = useMemo(() => rankProspects(prospects, actions, today), [prospects, actions, today])
+  const topPriorities = useMemo(() => sortByPriority(prospects, priorities).filter((p) => priorities.get(p.id)?.rank).slice(0, 3), [prospects, priorities])
+  const filteredProspects = useMemo(() => {
+    const matching = prospects.filter(
         (item) =>
           (!statusFilter || item.status === statusFilter) &&
           (!ownerFilter || (ownerFilter === NO_OWNER ? !item.owner : item.owner === ownerFilter)) &&
           `${item.institution} ${item.contacts.map((c) => `${c.name} ${c.email}`).join(" ")} ${item.offer} ${item.owner} ${item.address}`.toLowerCase().includes(query.toLowerCase()),
-      ),
-    [prospects, query, statusFilter, ownerFilter],
-  )
+    )
+    // Les prospects arrivent du plus récent au plus ancien.
+    return sortMode === 'priority' ? sortByPriority(matching, priorities) : matching
+  }, [prospects, query, statusFilter, ownerFilter, sortMode, priorities])
 
   const pendingActions = actions.filter((a) => !a.done)
   const activeProspects = prospects.filter((p) => !CLOSED_STATUSES.includes(p.status))
@@ -162,8 +172,7 @@ export function ProjectDashboard({
   const tracked = prospects.filter((p) => p.status !== 'Perdu')
   const avgProgress = tracked.length ? Math.round(tracked.reduce((sum, p) => sum + progressOf(p.status), 0) / tracked.length) : 0
   const signed = prospects.filter((p) => p.status === 'Signé').length
-  const overdue = prospects.filter((p) => p.date && p.date < todayIso() && !CLOSED_STATUSES.includes(p.status))
-  const today = todayIso()
+  const overdue = prospects.filter((p) => p.date && p.date < today && !CLOSED_STATUSES.includes(p.status))
   const showActions = activeTab === 'Actions à mener'
   const navItems: [View, React.ElementType][] = [
     ['Vue d’ensemble', LayoutDashboard],
@@ -424,11 +433,15 @@ export function ProjectDashboard({
               onDelete={(action) => deleteEditor.openWith({ kind: 'action', id: action.id, label: action.title })}
             />
           ) : (
+            <>
+            {topPriorities.length > 0 && <TopPriorities prospects={topPriorities} priorities={priorities} onOpen={(id) => detailEditor.openWith(id)} />}
             <Card className="mt-4 overflow-hidden rounded-2xl shadow-sm ring-slate-200/70">
               <CardHeader className="flex flex-col gap-4 border-b border-slate-100 pb-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <CardTitle className="text-base">Suivi de la prospection</CardTitle>
-                  <p className="mt-1 text-xs text-muted-foreground">Les opportunités commerciales en cours</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {sortMode === 'priority' ? 'Classées par priorité : urgence des actions, potentiel financier et engagement' : 'Les opportunités commerciales en cours'}
+                  </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <Button variant="outline" className="h-auto gap-1.5 py-2" onClick={() => setShowOffer((v) => !v)} aria-pressed={showOffer} title={showOffer ? 'Masquer la colonne « Offre proposée »' : 'Afficher la colonne « Offre proposée »'}>
@@ -438,6 +451,10 @@ export function ProjectDashboard({
                     <Search className="size-4 text-slate-400" />
                     <input aria-label="Rechercher un prospect" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Rechercher..." className="w-32 bg-transparent text-sm outline-none placeholder:text-slate-400 sm:w-44" />
                   </div>
+                  <NativeSelect aria-label="Classement" value={sortMode} onChange={(e) => setSortMode(e.target.value as 'priority' | 'recent')} className="h-auto w-auto py-2">
+                    <option value="priority">Tri : priorité</option>
+                    <option value="recent">Tri : plus récents</option>
+                  </NativeSelect>
                   <NativeSelect aria-label="Filtrer par responsable" value={ownerFilter} onChange={(e) => setOwnerFilter(e.target.value)} className="h-auto w-auto py-2">
                     <option value="">Tous les responsables</option>
                     {owners.map((owner) => (
@@ -462,7 +479,8 @@ export function ProjectDashboard({
                   <Table>
                     <TableHeader>
                       <TableRow className="bg-slate-50/70 hover:bg-slate-50/70">
-                        <TableHead className="pl-6">Institution / prospect</TableHead>
+                        <TableHead className="pl-6">Priorité</TableHead>
+                        <TableHead>Institution / prospect</TableHead>
                         {showContacts && <TableHead>Contact</TableHead>}
                         {showOffer && <TableHead>Offre proposée</TableHead>}
                         <TableHead>Plateforme</TableHead>
@@ -477,7 +495,7 @@ export function ProjectDashboard({
                     <TableBody>
                       {filteredProspects.length === 0 && (
                         <TableRow>
-                          <TableCell colSpan={8 + Number(showOffer) + Number(showContacts)} className="py-10 text-center text-sm text-muted-foreground">
+                          <TableCell colSpan={9 + Number(showOffer) + Number(showContacts)} className="py-10 text-center text-sm text-muted-foreground">
                             {prospects.length > 0 ? 'Aucun prospect ne correspond à la recherche.' : editable ? 'Aucun prospect. Ajoutez-en un avec « Nouveau prospect ».' : 'Aucun dossier ne vous a encore été assigné.'}
                           </TableCell>
                         </TableRow>
@@ -485,6 +503,9 @@ export function ProjectDashboard({
                       {filteredProspects.map((item) => (
                         <TableRow key={item.id}>
                           <TableCell className="pl-6">
+                            <PriorityCell prospectId={item.id} priority={priorities.get(item.id)} amount={item.amount} editable={editable} />
+                          </TableCell>
+                          <TableCell>
                             <button onClick={() => detailEditor.openWith(item.id)} className="text-left font-medium hover:text-primary hover:underline" title="Voir l’avancement et les commentaires">
                               {item.institution}
                             </button>
@@ -583,6 +604,7 @@ export function ProjectDashboard({
                 </div>
               </CardContent>
             </Card>
+            </>
           )}
           </>
           )}
@@ -671,6 +693,130 @@ function PipelineChart({ data, total }: { data: { status: ProspectStatus; count:
         )
       })}
     </ul>
+  )
+}
+
+/**
+ * Score, niveau et potentiel financier ; le détail du calcul s'affiche au survol.
+ * Un éditeur peut cliquer sur le niveau pour le fixer à la main ou revenir à l'automatique.
+ */
+function PriorityCell({ prospectId, priority, amount, editable }: { prospectId: string; priority?: Priority; amount: number | null; editable: boolean }) {
+  const [pending, startTransition] = useTransition()
+  if (!priority) return null
+  const detail = priority.rank
+    ? `Score ${priority.score}/100 — Actions ${priority.action} · Potentiel ${priority.financial} · Engagement ${priority.engagement}\n${priority.reasons.join(' · ')}`
+    : 'Dossier clôturé, non classé'
+
+  function choose(value: ManualPriority | null) {
+    startTransition(async () => {
+      const result = await updateProspectPriority(prospectId, value)
+      if (!result.ok) alert(result.error)
+    })
+  }
+
+  const badge = (
+    <>
+      {priority.manual && <Pin className="size-3" aria-label="Fixée à la main" />}
+      {priority.tier}
+      {priority.rank && <span className="ml-1 tabular-nums opacity-70">{priority.score}</span>}
+    </>
+  )
+  const itemClass = 'flex cursor-default items-center gap-2 rounded-lg px-2.5 py-2 outline-none data-highlighted:bg-slate-100'
+
+  return (
+    <div className="flex min-w-28 flex-col gap-1" title={detail}>
+      <div className="flex items-center gap-1.5">
+        {priority.rank && <span className="w-6 text-xs font-semibold text-slate-400 tabular-nums">#{priority.rank}</span>}
+        {editable && priority.rank ? (
+          <Menu.Root>
+            <Menu.Trigger disabled={pending} className={cn(badgeVariants({ variant: 'outline' }), tierStyles[priority.tier], 'cursor-pointer gap-1 hover:opacity-80 disabled:opacity-50')} aria-label="Modifier la priorité">
+              {badge}
+              <ChevronDown className="size-3 opacity-60" />
+            </Menu.Trigger>
+            <Menu.Portal>
+              <Menu.Positioner sideOffset={4} align="start" className="z-50">
+                <Menu.Popup className="min-w-52 rounded-xl border border-slate-200 bg-card p-1.5 text-sm shadow-lg outline-none transition-[opacity,transform] data-ending-style:scale-95 data-ending-style:opacity-0 data-starting-style:scale-95 data-starting-style:opacity-0">
+                  <p className="px-2.5 pt-1 pb-1.5 text-xs font-medium text-muted-foreground">Priorité</p>
+                  <Menu.Item onClick={() => choose(null)} className={itemClass}>
+                    <RotateCcw className="size-4 text-slate-500" /> Automatique ({priority.autoTier})
+                    {!priority.manual && <Check className="ml-auto size-4 text-primary" />}
+                  </Menu.Item>
+                  {MANUAL_PRIORITIES.map((tier) => (
+                    <Menu.Item key={tier} onClick={() => choose(tier)} className={itemClass}>
+                      <span className={cn('size-2.5 rounded-full border', tierStyles[tier])} /> {tier}
+                      {priority.manual && priority.tier === tier && <Check className="ml-auto size-4 text-primary" />}
+                    </Menu.Item>
+                  ))}
+                </Menu.Popup>
+              </Menu.Positioner>
+            </Menu.Portal>
+          </Menu.Root>
+        ) : (
+          <Badge variant="outline" className={cn(tierStyles[priority.tier], 'gap-1')}>
+            {badge}
+          </Badge>
+        )}
+      </div>
+      <span className={`text-xs tabular-nums ${priority.rank ? 'pl-7.5' : ''} ${amount == null ? 'text-slate-300' : 'text-slate-500'}`}>{formatAmount(amount)}</span>
+    </div>
+  )
+}
+
+/** Les trois dossiers en cours les plus prioritaires, mis en avant au-dessus du tableau. */
+function TopPriorities({ prospects, priorities, onOpen }: { prospects: Prospect[]; priorities: Map<string, Priority>; onOpen: (id: string) => void }) {
+  return (
+    <section className="mt-4">
+      <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+        <Flame className="size-4 text-rose-500" />
+        <h3 className="text-sm font-semibold">À prioriser</h3>
+        <span className="text-xs text-muted-foreground">Classement automatique selon l’urgence des actions, le potentiel financier et l’engagement</span>
+      </div>
+      <div className="grid gap-3 md:grid-cols-3">
+        {prospects.map((p) => {
+          const priority = priorities.get(p.id)!
+          return (
+            <button key={p.id} onClick={() => onOpen(p.id)} className="group flex flex-col gap-3 rounded-2xl bg-card p-4 text-left shadow-sm ring-1 ring-slate-200/70 transition hover:ring-primary/40">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold text-slate-400">#{priority.rank}</p>
+                  <p className="truncate font-semibold group-hover:text-primary">{p.institution}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {formatAmount(p.amount)} · {p.status}
+                  </p>
+                </div>
+                <div className="flex shrink-0 flex-col items-end gap-1">
+                  <span className="text-2xl leading-none font-semibold tabular-nums">{priority.score}</span>
+                  <Badge variant="outline" className={cn(tierStyles[priority.tier], 'gap-1')} title={priority.manual ? `Fixée à la main (auto : ${priority.autoTier})` : undefined}>
+                    {priority.manual && <Pin className="size-3" />}
+                    {priority.tier}
+                  </Badge>
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                {(
+                  [
+                    ['Actions', priority.action],
+                    ['Potentiel', priority.financial],
+                    ['Engagement', priority.engagement],
+                  ] as const
+                ).map(([label, value]) => (
+                  <div key={label}>
+                    <div className="flex justify-between text-[10px] text-muted-foreground">
+                      <span>{label}</span>
+                      <span className="tabular-nums">{value}</span>
+                    </div>
+                    <div className="mt-1 h-1 overflow-hidden rounded-full bg-slate-100">
+                      <div className="h-full rounded-full bg-primary" style={{ width: `${value}%` }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <p className="line-clamp-2 text-xs text-slate-500">{priority.reasons.join(' · ')}</p>
+            </button>
+          )
+        })}
+      </div>
+    </section>
   )
 }
 

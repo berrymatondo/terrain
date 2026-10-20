@@ -29,13 +29,14 @@ import {
   removeDocument,
   removeProspect,
   removeUser,
+  setProspectPriority,
   toggleAction,
   updateAction,
   updatePassword,
   updateProspect,
   updateUser,
 } from '@/lib/db'
-import { ACTION_DUE_LABELS, canModifyComment, LEGACY_OWNER, MAX_COMMENT_LENGTH, MAX_CONTACTS, normalizeUrl, PROSPECT_STATUSES, ROLES, type Contact, type ActionDue, type MutationResult, type ProspectStatus, type Role, type User } from '@/lib/types'
+import { ACTION_DUE_LABELS, canModifyComment, LEGACY_OWNER, MANUAL_PRIORITIES, MAX_COMMENT_LENGTH, MAX_CONTACTS, normalizeUrl, PROSPECT_STATUSES, ROLES, type Contact, type ActionDue, type ManualPriority, type MutationResult, type ProspectStatus, type Role, type User } from '@/lib/types'
 
 class NotFoundError extends Error {}
 class ValidationError extends Error {}
@@ -83,6 +84,22 @@ async function resolveOwner(formData: FormData, current?: { owner: string; owner
 }
 
 /** Lien http(s) saisi dans le formulaire (« https:// » ajouté si absent). */
+/** Montant en USD : espaces et séparateurs de milliers acceptés, virgule ou point décimal. */
+function amount(formData: FormData, key: string) {
+  const raw = text(formData, key).replace(/[\s  $]/g, '').replace(',', '.')
+  if (!raw) return null
+  const value = Number(raw)
+  if (!Number.isFinite(value) || value < 0 || value >= 1e12) invalid('Potentiel financier : montant invalide (exemple : 25000).')
+  return Math.round(value * 100) / 100
+}
+
+/** Valeur vide = classement automatique. */
+function manualPriority(value: string | null): ManualPriority | null {
+  if (!value) return null
+  if (!MANUAL_PRIORITIES.includes(value as ManualPriority)) invalid('Priorité invalide.')
+  return value as ManualPriority
+}
+
 function url(formData: FormData, key: string, label: string) {
   const value = normalizeUrl(text(formData, key))
   if (value === null) invalid(`${label} : adresse invalide (exemple : https://exemple.cd).`)
@@ -149,6 +166,8 @@ export async function saveProspect(formData: FormData): Promise<MutationResult> 
       contact: contacts[0]?.name ?? '',
       contacts,
       offer: text(formData, 'offer'),
+      amount: amount(formData, 'amount'),
+      priority: manualPriority(text(formData, 'priority')),
       status,
       next: text(formData, 'next'),
       date: date || null,
@@ -171,6 +190,11 @@ export async function saveProspect(formData: FormData): Promise<MutationResult> 
 
     await safely(notifyProspect(user, id ? 'updated' : 'created', before, await getProspectSnapshot(prospectId)))
   })
+}
+
+/** Fixe la priorité d'un prospect, ou la rend au classement automatique (null). */
+export async function updateProspectPriority(id: string, priority: string | null): Promise<MutationResult> {
+  return run(EDITORS, async () => ensureFound(await setProspectPriority(id, manualPriority(priority)), 'Ce prospect n’existe plus.'))
 }
 
 export async function deleteProspect(id: string): Promise<MutationResult> {

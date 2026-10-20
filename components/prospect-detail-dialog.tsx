@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/field'
 import { PIPELINE, progressOf } from '@/lib/progress'
+import { formatAmount } from '@/lib/priority'
 import { canModifyComment, canSeeContacts, MAX_COMMENT_LENGTH, whatsappLink, type Comment, type Prospect, type User } from '@/lib/types'
 
 function initials(name: string) {
@@ -294,7 +295,7 @@ export function ProspectDetailDialog({ open, onOpenChange, prospect, currentUser
                   <FileDown data-icon="inline-start" /> Rapport PDF
                 </a>
               </div>
-              <DialogDescription>{[prospect.offer, prospect.owner && `Responsable : ${prospect.owner}`].filter(Boolean).join(' · ') || 'Suivi du prospect'}</DialogDescription>
+              <DialogDescription>{[prospect.offer, prospect.amount != null && `Potentiel : ${formatAmount(prospect.amount)}`, prospect.owner && `Responsable : ${prospect.owner}`].filter(Boolean).join(' · ') || 'Suivi du prospect'}</DialogDescription>
             </DialogHeader>
 
             <InstitutionCard prospect={prospect} showContacts={canSeeContacts(currentUser.role)} />

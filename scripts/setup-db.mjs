@@ -127,6 +127,11 @@ await sql`ALTER TABLE prospects ADD COLUMN IF NOT EXISTS address text NOT NULL D
 await sql`ALTER TABLE prospects ADD COLUMN IF NOT EXISTS website text NOT NULL DEFAULT ''`
 await sql`ALTER TABLE prospects ADD COLUMN IF NOT EXISTS platform_url text NOT NULL DEFAULT ''`
 
+// Potentiel financier estimé du projet, en USD (sert au classement du portefeuille).
+await sql`ALTER TABLE prospects ADD COLUMN IF NOT EXISTS amount numeric(14, 2)`
+// Priorité fixée à la main (Haute, Moyenne, Basse) ; NULL = classement automatique.
+await sql`ALTER TABLE prospects ADD COLUMN IF NOT EXISTS priority text`
+
 // Plusieurs contacts par institution.
 await sql`
   CREATE TABLE IF NOT EXISTS prospect_contacts (

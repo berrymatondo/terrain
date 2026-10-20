@@ -9,7 +9,7 @@ import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, Di
 import { Field, Input, NativeSelect, Textarea } from '@/components/ui/field'
 import { PdfViewer } from '@/components/pdf-viewer'
 import { previewOf } from '@/lib/documents'
-import { ACTION_DUE_LABELS, LEGACY_OWNER, MAX_CONTACTS, MAX_DOCUMENT_SIZE, PROSPECT_STATUSES, ROLE_DESCRIPTIONS, ROLE_LABELS, ROLES, type Action, type Contact, type DocumentMeta, type Member, type MutationResult, type Prospect, type User } from '@/lib/types'
+import { ACTION_DUE_LABELS, LEGACY_OWNER, MANUAL_PRIORITIES, MAX_CONTACTS, MAX_DOCUMENT_SIZE, PROSPECT_STATUSES, ROLE_DESCRIPTIONS, ROLE_LABELS, ROLES, type Action, type Contact, type DocumentMeta, type Member, type MutationResult, type Prospect, type User } from '@/lib/types'
 
 type DialogProps = { open: boolean; onOpenChange: (open: boolean) => void; formKey: number }
 
@@ -172,6 +172,19 @@ function ProspectForm({ prospect, assignableUsers, members, onSuccess }: { prosp
       <FormSection title="Offre et plateforme">
         <Field label="Offre proposée" htmlFor="offer">
           <Input id="offer" name="offer" defaultValue={prospect?.offer} />
+        </Field>
+        <Field label="Potentiel financier estimé (USD)" htmlFor="amount">
+          <Input id="amount" name="amount" inputMode="decimal" placeholder="25 000" defaultValue={prospect?.amount ?? ''} />
+        </Field>
+        <Field label="Priorité" htmlFor="priority">
+          <NativeSelect id="priority" name="priority" defaultValue={prospect?.priority ?? ''}>
+            <option value="">Automatique (calculée)</option>
+            {MANUAL_PRIORITIES.map((tier) => (
+              <option key={tier} value={tier}>
+                {tier}
+              </option>
+            ))}
+          </NativeSelect>
         </Field>
         <Field label="Lien d’accès à la plateforme" htmlFor="platformUrl">
           <Input id="platformUrl" name="platformUrl" inputMode="url" placeholder="https://plateforme.exemple.cd" defaultValue={prospect?.platformUrl} />

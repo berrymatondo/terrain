@@ -1,5 +1,6 @@
 import { Document, Font, Page, renderToBuffer, StyleSheet, Text, View } from '@react-pdf/renderer'
 import { PIPELINE, progressOf } from '@/lib/progress'
+import { formatAmount } from '@/lib/priority'
 import { canSeeContacts, ROLE_LABELS, type Action, type Prospect, type ProspectStatus, type User } from '@/lib/types'
 
 // Pas de coupure de mots avec tiret (« Proposition en-voyée »).
@@ -289,6 +290,7 @@ function ProspectDetail({ prospect, actions, ctx }: { prospect: Prospect; action
     ['Site web', prospect.website || '—'],
     ['Plateforme', prospect.platformUrl || '—'],
     ['Offre proposée', prospect.offer || '—'],
+    ['Potentiel financier', formatAmount(prospect.amount)],
     ['Responsable', prospect.owner || '—'],
     ['Prochaine action', prospect.next || '—'],
     ['Date de relance', formatDay(prospect.date) + (isOverdue(prospect) ? '  (en retard)' : '')],
