@@ -48,7 +48,7 @@ export default async function RootLayout({
     <html lang="fr" data-theme={theme} className={theme === "dark" ? "dark" : undefined} suppressHydrationWarning>
       <body className="antialiased" cz-shortcut-listen="true">
         <ThemeSync />
-        {children}
+        {children} 
         {process.env.NODE_ENV === "production" && <Analytics />}
       </body>
     </html>
