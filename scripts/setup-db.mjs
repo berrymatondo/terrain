@@ -131,6 +131,8 @@ await sql`ALTER TABLE prospects ADD COLUMN IF NOT EXISTS platform_url text NOT N
 await sql`ALTER TABLE prospects ADD COLUMN IF NOT EXISTS amount numeric(14, 2)`
 // Priorité fixée à la main (Haute, Moyenne, Basse) ; NULL = classement automatique.
 await sql`ALTER TABLE prospects ADD COLUMN IF NOT EXISTS priority text`
+// Identifiants d'accès à la plateforme (réservés aux admins et managers).
+await sql`ALTER TABLE prospects ADD COLUMN IF NOT EXISTS credentials text NOT NULL DEFAULT ''`
 
 // Plusieurs contacts par institution.
 await sql`

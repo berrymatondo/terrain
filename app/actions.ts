@@ -174,6 +174,7 @@ export async function saveProspect(formData: FormData): Promise<MutationResult> 
       address: text(formData, 'address').slice(0, 500),
       website: url(formData, 'website', 'Site web'),
       platformUrl: url(formData, 'platformUrl', 'Lien de la plateforme'),
+      credentials: text(formData, 'credentials').slice(0, 2000),
       ...(await resolveOwner(formData, before)),
     }
 

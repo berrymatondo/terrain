@@ -44,6 +44,8 @@ export type Prospect = {
   website: string
   /** Lien d'accès à la plateforme développée pour ce prospect. */
   platformUrl: string
+  /** Logins et mots de passe de la plateforme ; toujours vide pour un « user ». */
+  credentials: string
   /** Contacts de l'institution, dans l'ordre (le premier est le contact principal). */
   contacts: Contact[]
   /** Utilisateurs (profil « user ») ayant accès à ce dossier. */
@@ -132,6 +134,9 @@ export const canEdit = (role: Role) => role === 'admin' || role === 'manager'
 
 /** Les coordonnées des contacts ne sont pas communiquées aux « Utilisateurs ». */
 export const canSeeContacts = (role: Role) => canEdit(role)
+
+/** Les identifiants d'accès aux plateformes ne sont communiqués qu'aux admins et managers. */
+export const canSeeCredentials = (role: Role) => canEdit(role)
 
 export const canManageUsers = (role: Role) => role === 'admin'
 

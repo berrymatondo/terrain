@@ -189,6 +189,9 @@ function ProspectForm({ prospect, assignableUsers, members, onSuccess }: { prosp
         <Field label="Lien d’accès à la plateforme" htmlFor="platformUrl">
           <Input id="platformUrl" name="platformUrl" inputMode="url" placeholder="https://plateforme.exemple.cd" defaultValue={prospect?.platformUrl} />
         </Field>
+        <Field label="Identifiants d’accès (logins et mots de passe)" htmlFor="credentials">
+          <Textarea id="credentials" name="credentials" rows={3} className="min-h-0 font-mono text-xs" placeholder={'admin : jdupont / ••••••\nlecture : invite / ••••••'} spellCheck={false} autoComplete="off" defaultValue={prospect?.credentials} />
+        </Field>
       </FormSection>
 
       <FormSection title="Contacts">

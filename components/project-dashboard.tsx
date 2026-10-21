@@ -19,7 +19,7 @@ import { NativeSelect } from '@/components/ui/field'
 import { Separator } from '@/components/ui/separator'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { canEdit, canManageUsers, canSeeContacts, MANUAL_PRIORITIES, type ManualPriority, PROSPECT_STATUSES, ROLE_LABELS, type Action, type ActionDue, type Member, type Notification, type Prospect, type ProspectStatus, type Role, type User } from '@/lib/types'
+import { canEdit, canManageUsers, canSeeContacts, canSeeCredentials, MANUAL_PRIORITIES, type ManualPriority, PROSPECT_STATUSES, ROLE_LABELS, type Action, type ActionDue, type Member, type Notification, type Prospect, type ProspectStatus, type Role, type User } from '@/lib/types'
 
 const roleStyles: Record<Role, string> = {
   admin: 'bg-violet-100 text-violet-700 border-violet-200',
@@ -114,6 +114,7 @@ export function ProjectDashboard({
   const [statusFilter, setStatusFilter] = useState('')
   const [ownerFilter, setOwnerFilter] = useState('')
   const [showOffer, setShowOffer] = useState(false)
+  const [showCredentialsColumn, setShowCredentialsColumn] = useState(false)
   const [sortMode, setSortMode] = useState<'priority' | 'recent'>('priority')
   const prospectEditor = useEditor<Prospect>()
   const actionEditor = useEditor<Action>()
@@ -126,6 +127,8 @@ export function ProjectDashboard({
   const userNames = useMemo(() => new Map(assignableUsers.map((u) => [u.id, u.name])), [assignableUsers])
   const editable = canEdit(currentUser.role)
   const showContacts = canSeeContacts(currentUser.role)
+  // Colonne masquée par défaut, et jamais proposée aux « Utilisateurs ».
+  const showCredentials = canSeeCredentials(currentUser.role) && showCredentialsColumn
   const isAdmin = canManageUsers(currentUser.role)
 
   // Sur mobile, le menu s'ouvre en panneau par-dessus le contenu et n'est jamais réduit.
@@ -447,6 +450,11 @@ export function ProjectDashboard({
                   <Button variant="outline" className="h-auto gap-1.5 py-2" onClick={() => setShowOffer((v) => !v)} aria-pressed={showOffer} title={showOffer ? 'Masquer la colonne « Offre proposée »' : 'Afficher la colonne « Offre proposée »'}>
                     {showOffer ? <EyeOff data-icon="inline-start" /> : <Eye data-icon="inline-start" />} Offre
                   </Button>
+                  {canSeeCredentials(currentUser.role) && (
+                    <Button variant="outline" className="h-auto gap-1.5 py-2" onClick={() => setShowCredentialsColumn((v) => !v)} aria-pressed={showCredentials} title={showCredentials ? 'Masquer la colonne « Identifiants »' : 'Afficher la colonne « Identifiants »'}>
+                      {showCredentials ? <EyeOff data-icon="inline-start" /> : <KeyRound data-icon="inline-start" />} Identifiants
+                    </Button>
+                  )}
                   <div className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2">
                     <Search className="size-4 text-slate-400" />
                     <input aria-label="Rechercher un prospect" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Rechercher..." className="w-32 bg-transparent text-sm outline-none placeholder:text-slate-400 sm:w-44" />
@@ -484,6 +492,7 @@ export function ProjectDashboard({
                         {showContacts && <TableHead>Contact</TableHead>}
                         {showOffer && <TableHead>Offre proposée</TableHead>}
                         <TableHead>Plateforme</TableHead>
+                        {showCredentials && <TableHead>Identifiants</TableHead>}
                         <TableHead>Suivi</TableHead>
                         <TableHead>Statut / avancement</TableHead>
                         <TableHead>Prochaine action</TableHead>
@@ -495,7 +504,7 @@ export function ProjectDashboard({
                     <TableBody>
                       {filteredProspects.length === 0 && (
                         <TableRow>
-                          <TableCell colSpan={9 + Number(showOffer) + Number(showContacts)} className="py-10 text-center text-sm text-muted-foreground">
+                          <TableCell colSpan={9 + Number(showOffer) + Number(showContacts) + Number(showCredentials)} className="py-10 text-center text-sm text-muted-foreground">
                             {prospects.length > 0 ? 'Aucun prospect ne correspond à la recherche.' : editable ? 'Aucun prospect. Ajoutez-en un avec « Nouveau prospect ».' : 'Aucun dossier ne vous a encore été assigné.'}
                           </TableCell>
                         </TableRow>
@@ -538,6 +547,15 @@ export function ProjectDashboard({
                               <span className="text-sm text-slate-300">—</span>
                             )}
                           </TableCell>
+                          {showCredentials && (
+                            <TableCell className="max-w-64 min-w-44">
+                              {item.credentials ? (
+                                <p className="font-mono text-xs break-all whitespace-pre-wrap text-slate-600">{item.credentials}</p>
+                              ) : (
+                                <span className="text-sm text-slate-300">—</span>
+                              )}
+                            </TableCell>
+                          )}
                           <TableCell>
                             <div className="flex gap-1.5">
                               <Button variant="outline" size="sm" className="gap-1.5" onClick={() => detailEditor.openWith(item.id)} aria-label={`Commentaires et avancement de ${item.institution}`} title="Avancement et commentaires">
