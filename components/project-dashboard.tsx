@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from 'react'
 import { Menu } from '@base-ui/react/menu'
-import { CalendarDays, Check, ChevronDown, CircleCheck, Clock3, Eye, EyeOff, ExternalLink, FileDown, FileText, Flame, KeyRound, LayoutDashboard, LogOut, MessageSquare, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Paperclip, Pencil, Pin, Plus, RotateCcw, Search, Settings2, Target, Trash2, UserCog, Users } from 'lucide-react'
+import { Archive, Briefcase, CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, CircleCheck, House, ListTodo, Clock3, Eye, EyeOff, ExternalLink, FileDown, FileText, Flame, KeyRound, LayoutDashboard, LogOut, MessageSquare, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Paperclip, Pencil, Pin, Plus, RotateCcw, Search, Settings2, Target, Trash2, UserCog, Users } from 'lucide-react'
 import { logout, toggleActionDone, updateProspectPriority } from '@/app/actions'
 import { ActionDialog, DeleteDialog, DocumentsDialog, PasswordDialog, ReportPreviewDialog, ProspectDialog, UserDialog, type DeleteTarget } from '@/components/crud-dialogs'
 import { NotificationBell } from '@/components/notification-bell'
@@ -84,7 +84,9 @@ function useEditor<T>() {
 
 const NO_OWNER = '__none__'
 
-type View = 'Vue d’ensemble' | 'Actions à mener' | 'Utilisateurs'
+const PAGE_SIZES = [10, 25, 50] as const
+
+type View = 'Mon espace' | 'Vue d’ensemble' | 'Actions à mener' | 'Utilisateurs'
 
 export function ProjectDashboard({
   prospects,
@@ -107,7 +109,7 @@ export function ProjectDashboard({
   notifications: { items: Notification[]; unread: number }
   initialCollapsed: boolean
 }) {
-  const [activeTab, setActiveTab] = useState<View>('Vue d’ensemble')
+  const [activeTab, setActiveTab] = useState<View>('Mon espace')
   const [collapsed, setCollapsed] = useState(initialCollapsed)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -116,6 +118,9 @@ export function ProjectDashboard({
   const [showOffer, setShowOffer] = useState(false)
   const [showCredentialsColumn, setShowCredentialsColumn] = useState(false)
   const [sortMode, setSortMode] = useState<'priority' | 'recent'>('priority')
+  const [showClosed, setShowClosed] = useState(false)
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState<number>(PAGE_SIZES[0])
   const prospectEditor = useEditor<Prospect>()
   const actionEditor = useEditor<Action>()
   const userEditor = useEditor<User>()
@@ -152,16 +157,34 @@ export function ProjectDashboard({
   const today = todayIso()
   const priorities = useMemo(() => rankProspects(prospects, actions, today), [prospects, actions, today])
   const topPriorities = useMemo(() => sortByPriority(prospects, priorities).filter((p) => priorities.get(p.id)?.rank).slice(0, 3), [prospects, priorities])
+  // Choisir « Signé » ou « Perdu » dans le filtre de statut affiche ces dossiers même s'ils sont masqués.
+  const includeClosed = showClosed || CLOSED_STATUSES.includes(statusFilter as ProspectStatus)
+  const closedCount = prospects.filter((p) => CLOSED_STATUSES.includes(p.status)).length
   const filteredProspects = useMemo(() => {
     const matching = prospects.filter(
         (item) =>
+          (includeClosed || !CLOSED_STATUSES.includes(item.status)) &&
           (!statusFilter || item.status === statusFilter) &&
           (!ownerFilter || (ownerFilter === NO_OWNER ? !item.owner : item.owner === ownerFilter)) &&
           `${item.institution} ${item.contacts.map((c) => `${c.name} ${c.email}`).join(" ")} ${item.offer} ${item.owner} ${item.address}`.toLowerCase().includes(query.toLowerCase()),
     )
     // Les prospects arrivent du plus récent au plus ancien.
     return sortMode === 'priority' ? sortByPriority(matching, priorities) : matching
-  }, [prospects, query, statusFilter, ownerFilter, sortMode, priorities])
+  }, [prospects, query, statusFilter, ownerFilter, sortMode, priorities, includeClosed])
+
+  const pageCount = Math.max(1, Math.ceil(filteredProspects.length / pageSize))
+  // La page reste valide si la liste raccourcit (filtre, suppression).
+  const currentPage = Math.min(page, pageCount)
+  const pageStart = (currentPage - 1) * pageSize
+  const pagedProspects = filteredProspects.slice(pageStart, pageStart + pageSize)
+
+  /** Change un filtre et revient à la première page. */
+  function withFirstPage<T>(set: (value: T) => void) {
+    return (value: T) => {
+      set(value)
+      setPage(1)
+    }
+  }
 
   const pendingActions = actions.filter((a) => !a.done)
   const activeProspects = prospects.filter((p) => !CLOSED_STATUSES.includes(p.status))
@@ -178,6 +201,7 @@ export function ProjectDashboard({
   const overdue = prospects.filter((p) => p.date && p.date < today && !CLOSED_STATUSES.includes(p.status))
   const showActions = activeTab === 'Actions à mener'
   const navItems: [View, React.ElementType][] = [
+    ['Mon espace', House],
     ['Vue d’ensemble', LayoutDashboard],
     ...(isAdmin ? [['Utilisateurs', UserCog] as [View, React.ElementType]] : []),
   ]
@@ -202,7 +226,7 @@ export function ProjectDashboard({
           {!compact && <p className="px-3 pb-2 text-[11px] font-semibold tracking-wider text-slate-500 uppercase">Espace de travail</p>}
           {navItems.map(([label, Icon]) => {
             // L'onglet « Actions à mener » fait partie de la vue d'ensemble.
-            const active = label === 'Utilisateurs' ? activeTab === 'Utilisateurs' : activeTab !== 'Utilisateurs'
+            const active = label === 'Vue d’ensemble' ? activeTab === label || activeTab === 'Actions à mener' : activeTab === label
             return (
               <button
                 key={label}
@@ -315,6 +339,18 @@ export function ProjectDashboard({
               onCreate={() => userEditor.openWith()}
               onEdit={(user) => userEditor.openWith(user)}
               onDelete={(user) => deleteEditor.openWith({ kind: 'user', id: user.id, label: user.name })}
+            />
+          ) : activeTab === 'Mon espace' ? (
+            <MySpace
+              prospects={prospects}
+              actions={actions}
+              priorities={priorities}
+              currentUser={currentUser}
+              today={today}
+              editable={editable}
+              onOpen={(id) => detailEditor.openWith(id)}
+              onEditAction={(action) => actionEditor.openWith(action)}
+              onShowAll={() => setActiveTab('Vue d’ensemble')}
             />
           ) : (
           <>
@@ -455,15 +491,25 @@ export function ProjectDashboard({
                       {showCredentials ? <EyeOff data-icon="inline-start" /> : <KeyRound data-icon="inline-start" />} Identifiants
                     </Button>
                   )}
+                  <Button
+                    variant="outline"
+                    className="h-auto gap-1.5 py-2"
+                    onClick={() => withFirstPage(setShowClosed)(!showClosed)}
+                    aria-pressed={showClosed}
+                    title={showClosed ? 'Masquer les dossiers clôturés (signés ou perdus)' : 'Afficher les dossiers clôturés (signés ou perdus)'}
+                  >
+                    {showClosed ? <EyeOff data-icon="inline-start" /> : <Archive data-icon="inline-start" />} Clôturés
+                    <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500 tabular-nums">{closedCount}</span>
+                  </Button>
                   <div className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2">
                     <Search className="size-4 text-slate-400" />
-                    <input aria-label="Rechercher un prospect" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Rechercher..." className="w-32 bg-transparent text-sm outline-none placeholder:text-slate-400 sm:w-44" />
+                    <input aria-label="Rechercher un prospect" value={query} onChange={(e) => withFirstPage(setQuery)(e.target.value)} placeholder="Rechercher..." className="w-32 bg-transparent text-sm outline-none placeholder:text-slate-400 sm:w-44" />
                   </div>
-                  <NativeSelect aria-label="Classement" value={sortMode} onChange={(e) => setSortMode(e.target.value as 'priority' | 'recent')} className="h-auto w-auto py-2">
+                  <NativeSelect aria-label="Classement" value={sortMode} onChange={(e) => withFirstPage(setSortMode)(e.target.value as 'priority' | 'recent')} className="h-auto w-auto py-2">
                     <option value="priority">Tri : priorité</option>
                     <option value="recent">Tri : plus récents</option>
                   </NativeSelect>
-                  <NativeSelect aria-label="Filtrer par responsable" value={ownerFilter} onChange={(e) => setOwnerFilter(e.target.value)} className="h-auto w-auto py-2">
+                  <NativeSelect aria-label="Filtrer par responsable" value={ownerFilter} onChange={(e) => withFirstPage(setOwnerFilter)(e.target.value)} className="h-auto w-auto py-2">
                     <option value="">Tous les responsables</option>
                     {owners.map((owner) => (
                       <option key={owner} value={owner}>
@@ -472,7 +518,7 @@ export function ProjectDashboard({
                     ))}
                     {hasUnassigned && <option value={NO_OWNER}>Sans responsable</option>}
                   </NativeSelect>
-                  <NativeSelect aria-label="Filtrer par statut" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="h-auto w-auto py-2">
+                  <NativeSelect aria-label="Filtrer par statut" value={statusFilter} onChange={(e) => withFirstPage(setStatusFilter)(e.target.value)} className="h-auto w-auto py-2">
                     <option value="">Tous les statuts</option>
                     {PROSPECT_STATUSES.map((status) => (
                       <option key={status} value={status}>
@@ -505,11 +551,15 @@ export function ProjectDashboard({
                       {filteredProspects.length === 0 && (
                         <TableRow>
                           <TableCell colSpan={9 + Number(showOffer) + Number(showContacts) + Number(showCredentials)} className="py-10 text-center text-sm text-muted-foreground">
-                            {prospects.length > 0 ? 'Aucun prospect ne correspond à la recherche.' : editable ? 'Aucun prospect. Ajoutez-en un avec « Nouveau prospect ».' : 'Aucun dossier ne vous a encore été assigné.'}
+                            {prospects.length > 0
+                              ? !includeClosed && closedCount > 0
+                                ? `Aucun dossier en cours ne correspond à la recherche (${closedCount} clôturé${closedCount > 1 ? 's' : ''} masqué${closedCount > 1 ? 's' : ''}).`
+                                : 'Aucun prospect ne correspond à la recherche.'
+                              : editable ? 'Aucun prospect. Ajoutez-en un avec « Nouveau prospect ».' : 'Aucun dossier ne vous a encore été assigné.'}
                           </TableCell>
                         </TableRow>
                       )}
-                      {filteredProspects.map((item) => (
+                      {pagedProspects.map((item) => (
                         <TableRow key={item.id}>
                           <TableCell className="pl-6">
                             <PriorityCell prospectId={item.id} priority={priorities.get(item.id)} amount={item.amount} editable={editable} />
@@ -620,6 +670,18 @@ export function ProjectDashboard({
                     </TableBody>
                   </Table>
                 </div>
+                {filteredProspects.length > 0 && (
+                  <Pagination
+                    page={currentPage}
+                    pageCount={pageCount}
+                    pageSize={pageSize}
+                    start={pageStart}
+                    shown={pagedProspects.length}
+                    total={filteredProspects.length}
+                    onPageChange={setPage}
+                    onPageSizeChange={withFirstPage(setPageSize)}
+                  />
+                )}
               </CardContent>
             </Card>
             </>
@@ -835,6 +897,234 @@ function TopPriorities({ prospects, priorities, onOpen }: { prospects: Prospect[
         })}
       </div>
     </section>
+  )
+}
+
+function Pagination({
+  page,
+  pageCount,
+  pageSize,
+  start,
+  shown,
+  total,
+  onPageChange,
+  onPageSizeChange,
+}: {
+  page: number
+  pageCount: number
+  pageSize: number
+  start: number
+  shown: number
+  total: number
+  onPageChange: (page: number) => void
+  onPageSizeChange: (size: number) => void
+}) {
+  // Pages affichées : la première, la dernière et celles autour de la page courante.
+  const pages = Array.from({ length: pageCount }, (_, i) => i + 1).filter((p) => p === 1 || p === pageCount || Math.abs(p - page) <= 1)
+  return (
+    <div className="flex flex-col items-center justify-between gap-3 border-t border-slate-100 px-6 py-3 text-sm sm:flex-row">
+      <div className="flex items-center gap-3 text-muted-foreground">
+        <span className="tabular-nums">
+          {start + 1}–{start + shown} sur {total}
+        </span>
+        <NativeSelect aria-label="Lignes par page" value={pageSize} onChange={(e) => onPageSizeChange(Number(e.target.value))} className="h-8 w-auto py-1">
+          {PAGE_SIZES.map((size) => (
+            <option key={size} value={size}>
+              {size} par page
+            </option>
+          ))}
+        </NativeSelect>
+      </div>
+      {pageCount > 1 && (
+        <nav className="flex items-center gap-1" aria-label="Pagination">
+          <Button variant="ghost" size="icon-sm" disabled={page === 1} onClick={() => onPageChange(page - 1)} aria-label="Page précédente">
+            <ChevronLeft />
+          </Button>
+          {pages.map((p, i) => (
+            <span key={p} className="flex items-center gap-1">
+              {i > 0 && p - pages[i - 1] > 1 && <span className="px-1 text-slate-400">…</span>}
+              <Button variant={p === page ? 'default' : 'ghost'} size="icon-sm" className="tabular-nums" onClick={() => onPageChange(p)} aria-label={`Page ${p}`} aria-current={p === page ? 'page' : undefined}>
+                {p}
+              </Button>
+            </span>
+          ))}
+          <Button variant="ghost" size="icon-sm" disabled={page === pageCount} onClick={() => onPageChange(page + 1)} aria-label="Page suivante">
+            <ChevronRight />
+          </Button>
+        </nav>
+      )}
+    </div>
+  )
+}
+
+/** Rôles de l'utilisateur connecté dans un dossier ; vide s'il n'y participe pas. */
+function participationOf(prospect: Prospect, actions: Action[], user: User) {
+  const roles: string[] = []
+  if (prospect.ownerId === user.id) roles.push('Responsable')
+  // Un « user » ne voit que ses dossiers, mais la liste des assignés ne lui est pas transmise.
+  if (prospect.assigneeIds.includes(user.id) || (!canEdit(user.role) && prospect.ownerId !== user.id)) roles.push('Assigné')
+  if (actions.some((a) => a.prospectId === prospect.id && a.ownerId === user.id)) roles.push('Actions')
+  if (prospect.comments.some((c) => c.authorId === user.id)) roles.push('Commentaires')
+  return roles
+}
+
+/** Page d'accueil de l'utilisateur connecté : les dossiers auxquels il participe et ses actions. */
+function MySpace({
+  prospects,
+  actions,
+  priorities,
+  currentUser,
+  today,
+  editable,
+  onOpen,
+  onEditAction,
+  onShowAll,
+}: {
+  prospects: Prospect[]
+  actions: Action[]
+  priorities: Map<string, Priority>
+  currentUser: User
+  today: string
+  editable: boolean
+  onOpen: (id: string) => void
+  onEditAction: (action: Action) => void
+  onShowAll: () => void
+}) {
+  const [showClosed, setShowClosed] = useState(false)
+  const mine = sortByPriority(
+    prospects.map((p) => ({ ...p, roles: participationOf(p, actions, currentUser) })).filter((p) => p.roles.length > 0),
+    priorities,
+  )
+  const open = mine.filter((p) => !CLOSED_STATUSES.includes(p.status))
+  const closed = mine.filter((p) => CLOSED_STATUSES.includes(p.status))
+  const overdue = open.filter((p) => p.date && p.date < today)
+  const myActions = actions
+    .filter((a) => a.ownerId === currentUser.id && !a.done)
+    .sort((a, b) => Number(b.due === 'Prioritaire') - Number(a.due === 'Prioritaire'))
+  const institutionOf = (id: string | null) => prospects.find((p) => p.id === id)?.institution
+
+  const card = (p: (typeof mine)[number]) => {
+    const priority = priorities.get(p.id)
+    const late = p.date && p.date < today && !CLOSED_STATUSES.includes(p.status)
+    return (
+      <button key={p.id} onClick={() => onOpen(p.id)} className="group flex flex-col gap-3 rounded-2xl bg-card p-4 text-left shadow-sm ring-1 ring-slate-200/70 transition hover:ring-primary/40">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="truncate font-semibold group-hover:text-primary">{p.institution}</p>
+            <p className="text-xs text-muted-foreground">
+              {formatAmount(p.amount)}
+              {p.owner && ` · ${p.owner}`}
+            </p>
+          </div>
+          {priority && (
+            <Badge variant="outline" className={cn(tierStyles[priority.tier], 'shrink-0 gap-1')}>
+              {priority.manual && <Pin className="size-3" />}
+              {priority.tier}
+              {priority.rank && <span className="tabular-nums opacity-70">#{priority.rank}</span>}
+            </Badge>
+          )}
+        </div>
+        <div>
+          <Badge variant="outline" className={statusStyles[p.status]?.badge}>
+            {p.status}
+          </Badge>
+          <ProgressBar prospect={p} className="mt-1.5" />
+        </div>
+        {p.next && <p className="line-clamp-2 text-sm text-slate-600">{p.next}</p>}
+        <div className="mt-auto flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3">
+          <div className="flex flex-wrap gap-1">
+            {p.roles.map((role) => (
+              <span key={role} className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                {role}
+              </span>
+            ))}
+          </div>
+          <span className={`flex items-center gap-1 text-xs ${late ? 'font-medium text-rose-600' : 'text-slate-500'}`}>
+            <CalendarDays className="size-3.5" /> {formatDate(p.date)}
+          </span>
+        </div>
+      </button>
+    )
+  }
+
+  return (
+    <>
+      <section className="keep-colors relative mb-6 overflow-hidden rounded-3xl bg-linear-to-br from-[#0b1a30] via-[#132f57] to-blue-700 p-6 text-white shadow-xl shadow-blue-950/10 sm:p-8">
+        <div className="pointer-events-none absolute -top-24 -right-16 size-72 rounded-full bg-blue-400/25 blur-3xl" aria-hidden />
+        <div className="relative">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1 text-[11px] font-medium tracking-wide text-blue-100 ring-1 ring-white/15">
+            <House className="size-3" /> MON ESPACE
+          </span>
+          <h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Mes dossiers</h2>
+          <p className="mt-2 max-w-xl text-sm text-blue-100/80">Les dossiers dont vous êtes responsable, qui vous sont assignés, ou sur lesquels vous avez une action ou un commentaire.</p>
+        </div>
+        <div className="relative mt-7 grid gap-4 border-t border-white/10 pt-5 sm:grid-cols-3">
+          <HeroMetric label="Dossiers en cours" value={String(open.length)} hint={`${mine.length} au total, dont ${closed.length} clôturé${closed.length > 1 ? 's' : ''}`} />
+          <HeroMetric label="Relances en retard" value={String(overdue.length)} hint={overdue.length ? overdue.map((p) => p.institution).slice(0, 3).join(', ') + (overdue.length > 3 ? '…' : '') : 'Tout est à jour'} alert={overdue.length > 0} />
+          <HeroMetric label="Mes actions à mener" value={String(myActions.length)} hint={`${myActions.filter((a) => a.due === 'Prioritaire').length} prioritaire(s)`} />
+        </div>
+      </section>
+
+      <div className="grid gap-5 xl:grid-cols-[1fr_22rem]">
+        <section>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Briefcase className="size-4 text-primary" />
+              <h3 className="text-sm font-semibold">Dossiers en cours</h3>
+              <span className="text-xs text-muted-foreground">classés par priorité</span>
+            </div>
+            <button onClick={onShowAll} className="text-xs font-medium text-primary hover:underline">
+              Voir tout le portefeuille
+            </button>
+          </div>
+          {open.length === 0 ? (
+            <p className="rounded-2xl bg-card py-10 text-center text-sm text-muted-foreground ring-1 ring-slate-200/70">Vous ne participez à aucun dossier en cours.</p>
+          ) : (
+            <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">{open.map(card)}</div>
+          )}
+          {closed.length > 0 && (
+            <div className="mt-5">
+              <button onClick={() => setShowClosed((v) => !v)} aria-expanded={showClosed} className="flex items-center gap-2 text-sm font-medium text-slate-500 hover:text-slate-900">
+                <Archive className="size-4" /> Dossiers clôturés ({closed.length})
+                <ChevronDown className={`size-4 transition-transform ${showClosed ? 'rotate-180' : ''}`} />
+              </button>
+              {showClosed && <div className="mt-3 grid gap-3 opacity-80 md:grid-cols-2 2xl:grid-cols-3">{closed.map(card)}</div>}
+            </div>
+          )}
+        </section>
+
+        <Card className="h-fit rounded-2xl shadow-sm ring-slate-200/70">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base font-semibold">
+              <ListTodo className="size-4 text-primary" /> Mes actions
+            </CardTitle>
+            <p className="mt-1 text-xs text-muted-foreground">Actions dont vous êtes responsable</p>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-2">
+            {myActions.length === 0 && <p className="py-6 text-center text-sm text-muted-foreground">Aucune action en attente.</p>}
+            {myActions.map((action) => (
+              <button
+                key={action.id}
+                disabled={!editable}
+                onClick={() => onEditAction(action)}
+                className="flex items-start gap-3 rounded-xl border border-slate-100 p-3 text-left transition enabled:hover:bg-slate-50"
+              >
+                <div className={`flex size-8 shrink-0 items-center justify-center rounded-xl ${dueTones[action.due]}`}>
+                  <CalendarDays className="size-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-sm leading-snug font-medium">{action.title}</p>
+                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${dueTones[action.due]}`}>{action.due}</span>
+                  </div>
+                  {action.prospectId && <p className="mt-0.5 truncate text-xs text-muted-foreground">{institutionOf(action.prospectId)}</p>}
+                </div>
+              </button>
+            ))}
+          </CardContent>
+        </Card>
+      </div>
+    </>
   )
 }
 
